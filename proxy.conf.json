@@ -1,0 +1,20 @@
+{
+  "/auth": {
+    "target": "http://host.docker.internal:8080",
+    "secure": false,
+    "changeOrigin": true,
+    "logLevel": "debug"
+  },
+  "/orders": {
+    "target": "http://host.docker.internal:8080",
+    "secure": false,
+    "changeOrigin": true,
+    "logLevel": "debug"
+  },
+  "/results": {
+    "target": "http://host.docker.internal:8080",
+    "secure": false,
+    "changeOrigin": true,
+    "logLevel": "debug"
+  }
+}

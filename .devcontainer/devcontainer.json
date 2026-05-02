@@ -1,0 +1,35 @@
+{
+  "name": "Portal Clinical Lab",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "angular.ng-template",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss",
+        "ms-azuretools.vscode-docker",
+        "formulahendry.auto-rename-tag",
+        "christian-kohler.path-intellisense"
+      ],
+      "settings": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.tabSize": 2,
+        "typescript.preferences.importModuleSpecifier": "relative"
+      }
+    }
+  },
+  "forwardPorts": [4200],
+  "portsAttributes": {
+    "4200": {
+      "label": "Angular Dev Server",
+      "onAutoForward": "openBrowser"
+    }
+  },
+  "postCreateCommand": "cd /workspace && npm install",
+  "remoteUser": "node"
+}
