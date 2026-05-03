@@ -9,6 +9,7 @@ import {
   OrderSummary,
   CreateOrderRequest,
   OrderFilters,
+  OrderStatus,
 } from '../models/order.model';
 
 @Injectable({ providedIn: 'root' })
@@ -64,9 +65,9 @@ export class OrdersService {
   /**
    * POST /orders/{id}/send — enviar al laboratorio aliado
    */
-  sendOrder(idSolicitudKey: string): Observable<{ idSolicitudKey: string; estadoDeLaOrden: string; fechaEnvio: string }> {
+  sendOrder(idSolicitudKey: string): Observable<{ idSolicitudKey: string; estadoDeLaOrden: OrderStatus; fechaEnvio: string }> {
     return this.http
-      .post<{ idSolicitudKey: string; estadoDeLaOrden: string; fechaEnvio: string }>(
+      .post<{ idSolicitudKey: string; estadoDeLaOrden: OrderStatus; fechaEnvio: string }>(
         `${this.base}/${idSolicitudKey}/send`,
         {}
       )

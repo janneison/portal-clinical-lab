@@ -8,6 +8,7 @@ interface NavItem {
   icon: string;
   route: string;
   roles?: string[];
+  divider?: boolean;
 }
 
 @Component({
@@ -38,18 +39,26 @@ interface NavItem {
         <!-- Nav -->
         <nav class="flex-1 px-2 py-4 space-y-1 overflow-y-auto scrollbar-thin">
           @for (item of visibleNavItems(); track item.route) {
-            <a
-              [routerLink]="item.route"
-              routerLinkActive="active"
-              class="sidebar-link"
-              [class.justify-center]="collapsed()"
-              [title]="collapsed() ? item.label : ''"
-            >
-              <span class="text-lg flex-shrink-0">{{ item.icon }}</span>
-              @if (!collapsed()) {
-                <span>{{ item.label }}</span>
-              }
-            </a>
+            @if (item.divider) {
+              <div class="pt-3 pb-1 px-3">
+                <p class="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                  {{ item.label }}
+                </p>
+              </div>
+            } @else {
+              <a
+                [routerLink]="item.route"
+                routerLinkActive="active"
+                class="sidebar-link"
+                [class.justify-center]="collapsed()"
+                [title]="collapsed() ? item.label : ''"
+              >
+                <span class="text-lg flex-shrink-0">{{ item.icon }}</span>
+                @if (!collapsed()) {
+                  <span>{{ item.label }}</span>
+                }
+              </a>
+            }
           }
         </nav>
 
@@ -98,6 +107,11 @@ interface NavItem {
             <span class="text-gray-500">☰</span>
           </button>
           <div class="flex-1"></div>
+          @if (authService.isLabOperator()) {
+            <a routerLink="/dashboard/orders/create" class="btn-primary btn-sm">
+              + Nueva orden
+            </a>
+          }
           <div class="flex items-center gap-2">
             <span class="text-xs text-gray-400">
               {{ authService.currentUser()?.username }}
@@ -121,9 +135,14 @@ export class ShellComponent {
   readonly collapsed = signal(false);
 
   private readonly navItems: NavItem[] = [
-    { label: 'Dashboard', icon: '📊', route: '/dashboard' },
-    { label: 'Órdenes', icon: '📋', route: '/dashboard/orders' },
-    { label: 'Resultados', icon: '🔬', route: '/dashboard/results' },
+    { label: 'Dashboard',    icon: '📊', route: '/dashboard' },
+    { label: 'Órdenes',      icon: '📋', route: '/dashboard/orders' },
+    { label: 'Resultados',   icon: '🔬', route: '/dashboard/results' },
+    // Admin section
+    { label: 'Administración', icon: '', route: '', roles: ['admin'], divider: true },
+    { label: 'Usuarios',     icon: '👤', route: '/dashboard/admin/users',  roles: ['admin'] },
+    { label: 'Laboratorios', icon: '🏥', route: '/dashboard/admin/labs',   roles: ['admin'] },
+    { label: 'Roles',        icon: '🔑', route: '/dashboard/admin/roles',  roles: ['admin'] },
   ];
 
   visibleNavItems() {

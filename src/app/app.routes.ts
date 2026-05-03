@@ -34,6 +34,13 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'orders/create',
+        loadComponent: () =>
+          import('./features/admin/orders-create/orders-create.component').then(
+            (m) => m.OrdersCreateComponent
+          ),
+      },
+      {
         path: 'orders/:id',
         loadComponent: () =>
           import('./features/orders/order-detail/order-detail.component').then(
@@ -53,6 +60,11 @@ export const routes: Routes = [
           import('./features/results/result-detail/result-detail.component').then(
             (m) => m.ResultDetailComponent
           ),
+      },
+      {
+        path: 'admin',
+        loadChildren: () =>
+          import('./features/admin/admin.routes').then((m) => m.adminRoutes),
       },
     ],
   },
