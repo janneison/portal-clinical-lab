@@ -10,3 +10,13 @@ export const adminGuard: CanActivateFn = () => {
 
   return router.createUrlTree(['/dashboard']);
 };
+
+/** Allows admin and lab_operator */
+export const labAdminGuard: CanActivateFn = () => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+
+  if (auth.isAdmin() || auth.isLabOperator()) return true;
+
+  return router.createUrlTree(['/dashboard']);
+};

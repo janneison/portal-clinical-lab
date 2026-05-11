@@ -1,6 +1,7 @@
 import { Component, inject, signal, OnInit, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { CommonModule } from '@angular/common';
+import { HttpClient } from '@angular/common/http';
 import { OrdersService } from '../../../core/services/orders.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { AuthService } from '../../../core/services/auth.service';
@@ -9,6 +10,7 @@ import { LoadingSpinnerComponent } from '../../../shared/components/loading-spin
 import { CriticalAlertComponent } from '../../../shared/components/critical-alert/critical-alert.component';
 import { LabOrder, OrderDetail } from '../../../core/models/order.model';
 import { isCriticalResult } from '../../../core/models/result.model';
+import { environment } from '@environments/environment';
 
 @Component({
   selector: 'app-order-detail',
@@ -47,6 +49,17 @@ import { isCriticalResult } from '../../../core/models/result.model';
           />
         }
 
+        <!-- DEV: raw response inspector -->
+        @if (showRaw()) {
+          <div class="card p-4 border-orange-300 border-2">
+            <div class="flex items-center justify-between mb-2">
+              <p class="text-xs font-bold text-orange-600">🔧 DEV — Raw API response (click para ocultar)</p>
+              <button (click)="showRaw.set(false)" class="text-xs text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <pre class="text-xs text-gray-700 overflow-x-auto bg-gray-50 p-3 rounded max-h-64">{{ rawOrder() | json }}</pre>
+          </div>
+        }
+
         <!-- Order header -->
         <div class="card p-6">
           <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
@@ -82,6 +95,9 @@ import { isCriticalResult } from '../../../core/models/result.model';
               <button (click)="shareOrder()" class="btn-secondary btn-sm">
                 📤 Compartir
               </button>
+              <button (click)="showRaw.set(!showRaw())" class="btn-ghost btn-sm text-orange-500" title="Ver JSON crudo">
+                🔧
+              </button>
             </div>
           </div>
 
@@ -104,66 +120,86 @@ import { isCriticalResult } from '../../../core/models/result.model';
         <!-- Patient info -->
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div class="card p-5">
-            <h2 class="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              👤 Información del Paciente
-            </h2>
+            <h2 class="font-semibold text-gray-900 mb-4">👤 Información del Paciente</h2>
             <dl class="space-y-3">
-              <div class="flex justify-between">
-                <dt class="text-sm text-gray-500">Nombre</dt>
-                <dd class="text-sm font-medium text-gray-900">{{ order()!.nombreDelPaciente }}</dd>
+              <div class="flex justify-between gap-4">
+                <dt class="text-sm text-gray-500 shrink-0">Nombre</dt>
+                <dd class="text-sm font-medium text-gray-900 text-right">{{ order()!.nombreDelPaciente || '—' }}</dd>
               </div>
-              <div class="flex justify-between">
-                <dt class="text-sm text-gray-500">Documento</dt>
-                <dd class="text-sm font-medium text-gray-900">
-                  {{ order()!.tipoDeDocumento }}: {{ order()!.identificacion }}
+              <div class="flex justify-between gap-4">
+                <dt class="text-sm text-gray-500 shrink-0">Documento</dt>
+                <dd class="text-sm font-medium text-gray-900 text-right">
+                  @if (order()!.tipoDeDocumento || order()!.identificacion) {
+                    {{ order()!.tipoDeDocumento || order()!.tipoDocumento }}: {{ order()!.identificacion }}
+                  } @else {
+                    <span class="text-gray-400">No disponible</span>
+                  }
                 </dd>
               </div>
-              <div class="flex justify-between">
-                <dt class="text-sm text-gray-500">Sexo</dt>
-                <dd class="text-sm font-medium text-gray-900">
-                  {{ order()!.sexo === 'M' ? 'Masculino' : 'Femenino' }}
+              <div class="flex justify-between gap-4">
+                <dt class="text-sm text-gray-500 shrink-0">Sexo</dt>
+                <dd class="text-sm font-medium text-gray-900 text-right">
+                  @if (order()!.sexo) {
+                    {{ order()!.sexo === 'M' ? 'Masculino' : 'Femenino' }}
+                  } @else {
+                    <span class="text-gray-400">—</span>
+                  }
                 </dd>
               </div>
-              <div class="flex justify-between">
-                <dt class="text-sm text-gray-500">Fecha de nacimiento</dt>
-                <dd class="text-sm font-medium text-gray-900">
-                  {{ order()!.fechaDeNacimiento | date:'dd/MM/yyyy' }}
+              <div class="flex justify-between gap-4">
+                <dt class="text-sm text-gray-500 shrink-0">Fecha de nacimiento</dt>
+                <dd class="text-sm font-medium text-gray-900 text-right">
+                  @if (order()!.fechaDeNacimiento) {
+                    {{ order()!.fechaDeNacimiento | date:'dd/MM/yyyy' }}
+                  } @else {
+                    <span class="text-gray-400">No disponible en API</span>
+                  }
                 </dd>
+              </div>
+              <div class="flex justify-between gap-4">
+                <dt class="text-sm text-gray-500 shrink-0">ID Admisión</dt>
+                <dd class="text-sm font-medium text-gray-900 text-right">{{ order()!.idAdmision || '—' }}</dd>
               </div>
             </dl>
           </div>
 
           <div class="card p-5">
-            <h2 class="font-semibold text-gray-900 mb-4 flex items-center gap-2">
-              🏥 Información Clínica
-            </h2>
+            <h2 class="font-semibold text-gray-900 mb-4">🏥 Información Clínica</h2>
             <dl class="space-y-3">
-              <div class="flex justify-between">
-                <dt class="text-sm text-gray-500">Centro de salud</dt>
-                <dd class="text-sm font-medium text-gray-900">{{ order()!.centroDeSalud }}</dd>
+              <div class="flex justify-between gap-4">
+                <dt class="text-sm text-gray-500 shrink-0">Centro de salud</dt>
+                <dd class="text-sm font-medium text-gray-900 text-right">
+                  {{ order()!.centroDeSalud || '—' }}
+                </dd>
               </div>
-              <div class="flex justify-between">
-                <dt class="text-sm text-gray-500">Médico que ordena</dt>
-                <dd class="text-sm font-medium text-gray-900">{{ order()!.medicoQueOrdena }}</dd>
+              <div class="flex justify-between gap-4">
+                <dt class="text-sm text-gray-500 shrink-0">Médico que ordena</dt>
+                <dd class="text-sm font-medium text-gray-900 text-right">
+                  {{ order()!.medicoQueOrdena || '—' }}
+                </dd>
               </div>
-              <div class="flex justify-between">
-                <dt class="text-sm text-gray-500">Fecha de orden</dt>
-                <dd class="text-sm font-medium text-gray-900">
-                  {{ order()!.fechaDeLaOrden | date:'dd/MM/yyyy HH:mm' }}
+              <div class="flex justify-between gap-4">
+                <dt class="text-sm text-gray-500 shrink-0">Fecha de orden</dt>
+                <dd class="text-sm font-medium text-gray-900 text-right">
+                  @if (order()!.fechaDeLaOrden) {
+                    {{ order()!.fechaDeLaOrden | date:'dd/MM/yyyy HH:mm' }}
+                  } @else {
+                    <span class="text-gray-400">—</span>
+                  }
                 </dd>
               </div>
               @if (order()!.fechaEnvio) {
-                <div class="flex justify-between">
-                  <dt class="text-sm text-gray-500">Fecha de envío</dt>
-                  <dd class="text-sm font-medium text-gray-900">
+                <div class="flex justify-between gap-4">
+                  <dt class="text-sm text-gray-500 shrink-0">Fecha de envío</dt>
+                  <dd class="text-sm font-medium text-gray-900 text-right">
                     {{ order()!.fechaEnvio | date:'dd/MM/yyyy HH:mm' }}
                   </dd>
                 </div>
               }
               @if (order()!.idAliado) {
-                <div class="flex justify-between">
-                  <dt class="text-sm text-gray-500">Laboratorio aliado</dt>
-                  <dd class="text-sm font-medium text-primary-700">{{ order()!.idAliado }}</dd>
+                <div class="flex justify-between gap-4">
+                  <dt class="text-sm text-gray-500 shrink-0">Laboratorio aliado</dt>
+                  <dd class="text-sm font-medium text-blue-700 text-right">{{ order()!.idAliado }}</dd>
                 </div>
               }
             </dl>
@@ -257,12 +293,15 @@ export class OrderDetailComponent implements OnInit {
 
   private readonly ordersService = inject(OrdersService);
   private readonly notifications = inject(NotificationService);
+  private readonly http = inject(HttpClient);
   readonly authService = inject(AuthService);
 
   readonly loading = signal(true);
   readonly error = signal('');
   readonly order = signal<LabOrder | null>(null);
   readonly sending = signal(false);
+  readonly showRaw = signal(false);
+  readonly rawOrder = signal<any>(null);
 
   readonly criticalDetails = () =>
     (this.order()?.detalles ?? []).filter((d) => this.isCritical(d));
@@ -275,7 +314,14 @@ export class OrderDetailComponent implements OnInit {
     this.loading.set(true);
     this.error.set('');
 
-    this.ordersService.getOrder(this.id()).subscribe({
+    // First fetch raw to show in debug panel, then fetch normalized
+    this.http.get<any>(`${environment.apiUrl}/orders/${this.id()}`).subscribe({
+      next: (raw) => {
+        this.rawOrder.set(raw);
+      },
+    });
+
+    this.ordersService.getOrderFullSearch(this.id()).subscribe({
       next: (order) => {
         this.order.set(order);
         this.loading.set(false);

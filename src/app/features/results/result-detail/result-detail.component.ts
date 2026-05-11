@@ -1,6 +1,8 @@
 import { Component, inject, signal, OnInit, input, computed } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { CommonModule } from '@angular/common';
+import { forkJoin, of } from 'rxjs';
+import { catchError } from 'rxjs/operators';
 import { OrdersService } from '../../../core/services/orders.service';
 import { ResultsService } from '../../../core/services/results.service';
 import { NotificationService } from '../../../core/services/notification.service';
@@ -8,8 +10,7 @@ import { LoadingSpinnerComponent } from '../../../shared/components/loading-spin
 import { CriticalAlertComponent } from '../../../shared/components/critical-alert/critical-alert.component';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 import { LabOrder } from '../../../core/models/order.model';
-import { LabResult } from '../../../core/models/result.model';
-
+import { LabResult, valuesToRows } from '../../../core/models/result.model';
 @Component({
   selector: 'app-result-detail',
   standalone: true,
@@ -22,7 +23,6 @@ import { LabResult } from '../../../core/models/result.model';
   ],
   template: `
     <div class="space-y-6 max-w-3xl">
-      <!-- Back -->
       <a [routerLink]="['/dashboard/results']" class="btn-ghost btn-sm inline-flex">
         ← Volver a resultados
       </a>
@@ -30,12 +30,11 @@ import { LabResult } from '../../../core/models/result.model';
       @if (loading()) {
         <app-loading-spinner message="Cargando resultado..." />
       } @else if (error()) {
-        <div class="alert-critical">
-          <span>❌</span>
-          <p>{{ error() }}</p>
+        <div class="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 flex gap-3">
+          <span>❌</span><p>{{ error() }}</p>
         </div>
       } @else if (result() && order()) {
-        <!-- Critical alert -->
+
         @if (result()!.isCritical) {
           <app-critical-alert
             [resultValue]="result()!.values.resultado"
@@ -43,7 +42,7 @@ import { LabResult } from '../../../core/models/result.model';
           />
         }
 
-        <!-- Result header card -->
+        <!-- Header -->
         <div class="card p-6">
           <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
             <div>
@@ -52,33 +51,31 @@ import { LabResult } from '../../../core/models/result.model';
                   CUPS: {{ cups() }}
                 </span>
                 @if (result()!.isCritical) {
-                  <span class="badge-critical">🚨 Crítico</span>
+                  <span class="badge bg-red-100 text-red-700 animate-pulse">🚨 Crítico</span>
                 }
               </div>
               <h1 class="text-xl font-bold text-gray-900">
                 {{ result()!.nombreDelLaboratorio ?? 'Examen ' + cups() }}
               </h1>
               <p class="text-sm text-gray-500 mt-1">
-                Orden: <span class="font-mono font-medium text-primary-700">{{ orderId() }}</span>
+                Orden:
+                <span class="font-mono font-medium text-blue-700">{{ orderId() }}</span>
               </p>
+              @if (result()!.receivedAt) {
+                <p class="text-xs text-gray-400 mt-0.5">
+                  Registrado: {{ result()!.receivedAt | date:'dd/MM/yyyy HH:mm' }}
+                </p>
+              }
             </div>
-
-            <!-- Actions -->
-            <div class="flex gap-2">
-              <button (click)="download()" class="btn-secondary btn-sm">
-                ⬇️ Descargar
-              </button>
-              <button (click)="share()" class="btn-secondary btn-sm">
-                📤 Compartir
-              </button>
-              <button (click)="print()" class="btn-secondary btn-sm">
-                🖨️ Imprimir
-              </button>
+            <div class="flex gap-2 flex-wrap">
+              <button (click)="download()" class="btn-secondary btn-sm">⬇️ Descargar</button>
+              <button (click)="share()" class="btn-secondary btn-sm">📤 Compartir</button>
+              <button (click)="print()" class="btn-secondary btn-sm">🖨️ Imprimir</button>
             </div>
           </div>
         </div>
 
-        <!-- Patient info -->
+        <!-- Patient -->
         <div class="card p-5">
           <h2 class="font-semibold text-gray-900 mb-4">👤 Paciente</h2>
           <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -113,49 +110,80 @@ import { LabResult } from '../../../core/models/result.model';
           </div>
         </div>
 
-        <!-- Main result -->
-        <div class="card p-5">
-          <h2 class="font-semibold text-gray-900 mb-4">🔬 Resultado Principal</h2>
-          <div
-            class="rounded-xl p-6 text-center"
+        <!-- Values table -->
+        <div class="card overflow-hidden">
+          <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between"
             [class.bg-red-50]="result()!.isCritical"
-            [class.bg-green-50]="!result()!.isCritical"
+            [class.bg-gray-50]="!result()!.isCritical"
           >
-            <p class="text-xs uppercase tracking-wider mb-2"
-              [class.text-red-500]="result()!.isCritical"
-              [class.text-green-500]="!result()!.isCritical"
-            >
-              Resultado
-            </p>
-            <p
-              class="text-4xl font-bold"
-              [class.text-red-700]="result()!.isCritical"
-              [class.text-green-700]="!result()!.isCritical"
-            >
-              {{ result()!.values.resultado }}
-            </p>
-            @if (result()!.receivedAt) {
-              <p class="text-xs text-gray-400 mt-3">
-                Registrado: {{ result()!.receivedAt | date:'dd/MM/yyyy HH:mm' }}
-              </p>
-            }
+            <h2 class="font-semibold text-gray-900">📊 Valores del resultado</h2>
+            <span class="text-xs text-gray-400">{{ rows().length }} parámetro(s)</span>
+          </div>
+
+          <div class="table-container rounded-none border-0">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th class="w-1/3">Parámetro</th>
+                  <th>Valor</th>
+                  <th>Unidad</th>
+                  <th>Referencia</th>
+                  <th class="w-28 text-center">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of rows(); track row.parametro) {
+                  <tr [class.bg-yellow-50]="row.isMain">
+                    <td>
+                      <span
+                        class="text-sm capitalize"
+                        [class.font-semibold]="row.isMain"
+                        [class.text-gray-900]="row.isMain"
+                        [class.text-gray-600]="!row.isMain"
+                      >
+                        {{ row.parametro }}
+                      </span>
+                      @if (row.isMain) {
+                        <span class="ml-2 text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">
+                          principal
+                        </span>
+                      }
+                    </td>
+                    <td>
+                      <span
+                        class="font-medium text-sm"
+                        [class.text-red-700]="row.isMain && result()!.isCritical"
+                        [class.text-green-700]="row.isMain && !result()!.isCritical"
+                        [class.text-gray-900]="!row.isMain"
+                      >
+                        {{ row.valor }}
+                      </span>
+                    </td>
+                    <td class="text-gray-500 text-xs">{{ row.unidad || '—' }}</td>
+                    <td class="text-gray-400 text-xs max-w-xs" [title]="row.referencia">
+                      <span class="block truncate max-w-[200px]">{{ row.referencia || '—' }}</span>
+                    </td>
+                    <td class="text-center">
+                      @if (row.isMain) {
+                        <span
+                          class="badge text-xs"
+                          [class.bg-red-100]="result()!.isCritical"
+                          [class.text-red-700]="result()!.isCritical"
+                          [class.bg-green-100]="!result()!.isCritical"
+                          [class.text-green-700]="!result()!.isCritical"
+                        >
+                          {{ result()!.isCritical ? '🚨 Crítico' : '✅ Normal' }}
+                        </span>
+                      } @else {
+                        <span class="text-gray-300">—</span>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
           </div>
         </div>
-
-        <!-- Detailed values -->
-        @if (extraValues().length > 0) {
-          <div class="card p-5">
-            <h2 class="font-semibold text-gray-900 mb-4">📊 Valores Detallados</h2>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              @for (kv of extraValues(); track kv.key) {
-                <div class="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-3">
-                  <span class="text-sm text-gray-500 capitalize">{{ kv.key }}</span>
-                  <span class="text-sm font-semibold text-gray-900">{{ kv.value }}</span>
-                </div>
-              }
-            </div>
-          </div>
-        }
 
         <!-- Attachment -->
         @if (result()!.attachmentPath) {
@@ -169,12 +197,8 @@ import { LabResult } from '../../../core/models/result.model';
                 </p>
                 <p class="text-xs text-gray-400">PDF</p>
               </div>
-              <a
-                [href]="result()!.attachmentPath"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="btn-secondary btn-sm"
-              >
+              <a [href]="result()!.attachmentPath" target="_blank"
+                rel="noopener noreferrer" class="btn-secondary btn-sm">
                 Abrir
               </a>
             </div>
@@ -197,15 +221,16 @@ export class ResultDetailComponent implements OnInit {
   readonly order = signal<LabOrder | null>(null);
   readonly result = signal<LabResult | null>(null);
 
-  readonly extraValues = computed(() =>
-    Object.entries(this.result()?.values ?? {})
-      .filter(([k]) => k !== 'resultado')
-      .map(([key, value]) => ({ key, value }))
+  readonly rows = computed(() =>
+    valuesToRows(this.result()?.valuesJson ?? this.result()?.values ?? { resultado: '' })
   );
 
   ngOnInit(): void {
-    this.ordersService.getOrder(this.orderId()).subscribe({
-      next: (order) => {
+    forkJoin({
+      order:      this.ordersService.getOrderFullSearch(this.orderId()),
+      apiResults: this.resultsService.getResultsByOrder(this.orderId()).pipe(catchError(() => of(null))),
+    }).subscribe({
+      next: ({ order, apiResults }) => {
         this.order.set(order);
 
         const detail = order.detalles.find((d) => d.cups === this.cups());
@@ -215,20 +240,34 @@ export class ResultDetailComponent implements OnInit {
           return;
         }
 
-        const raw: LabResult = {
-          idSolicitudKey: order.idSolicitudKey,
-          cups: detail.cups,
-          nombreDelLaboratorio: detail.nombreDelLaboratorio,
-          values: {
-            resultado: detail.estadoDelResultado ?? 'Pendiente',
-            ...(detail.metodo ? { metodo: detail.metodo } : {}),
-            ...(detail.reactivo ? { reactivo: detail.reactivo } : {}),
-            ...(detail.invima ? { invima: detail.invima } : {}),
-          },
-          receivedAt: detail.fechaResultado ?? undefined,
-        };
+        // Prefer real valuesJson from GET /orders/{id}/results
+        const apiItem = apiResults?.resultados.find((r) => r.cups === this.cups());
 
-        this.result.set(this.resultsService.enrichWithCritical(raw));
+        if (apiItem) {
+          this.result.set({
+            ...this.resultsService.fromApiResult(apiItem, detail.nombreDelLaboratorio),
+            idSolicitudKey: order.idSolicitudKey,
+          });
+        } else {
+          // Fallback: values_json not available — show status info only
+          this.result.set(
+            this.resultsService.enrichWithCritical({
+              idSolicitudKey:       order.idSolicitudKey,
+              cups:                 detail.cups,
+              nombreDelLaboratorio: detail.nombreDelLaboratorio,
+              values: {
+                resultado:      'Valores no disponibles aún',
+                estado:         detail.estadoDelResultado ?? '—',
+                fechaResultado: detail.fechaResultado     ?? '—',
+                ...(detail.metodo   ? { metodo:   detail.metodo   } : {}),
+                ...(detail.reactivo ? { reactivo: detail.reactivo } : {}),
+                ...(detail.invima   ? { invima:   detail.invima   } : {}),
+              },
+              receivedAt: detail.fechaResultado ?? undefined,
+            })
+          );
+        }
+
         this.loading.set(false);
       },
       error: (err: Error) => {
@@ -242,7 +281,6 @@ export class ResultDetailComponent implements OnInit {
     const result = this.result();
     const order = this.order();
     if (!result || !order) return;
-
     const text = this.resultsService.generateShareText(result, order.nombreDelPaciente);
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
@@ -258,14 +296,13 @@ export class ResultDetailComponent implements OnInit {
     const result = this.result();
     const order = this.order();
     if (!result || !order) return;
-
     const text = this.resultsService.generateShareText(result, order.nombreDelPaciente);
     if (navigator.share) {
       navigator.share({ title: `Resultado ${this.cups()}`, text });
     } else {
-      navigator.clipboard.writeText(text).then(() => {
-        this.notifications.success('Copiado al portapapeles');
-      });
+      navigator.clipboard.writeText(text).then(() =>
+        this.notifications.success('Copiado al portapapeles')
+      );
     }
   }
 

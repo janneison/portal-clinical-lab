@@ -140,9 +140,12 @@ export class ShellComponent {
     { label: 'Resultados',   icon: '🔬', route: '/dashboard/results' },
     // Admin section
     { label: 'Administración', icon: '', route: '', roles: ['admin'], divider: true },
-    { label: 'Usuarios',     icon: '👤', route: '/dashboard/admin/users',  roles: ['admin'] },
-    { label: 'Laboratorios', icon: '🏥', route: '/dashboard/admin/labs',   roles: ['admin'] },
-    { label: 'Roles',        icon: '🔑', route: '/dashboard/admin/roles',  roles: ['admin'] },
+    { label: 'Usuarios',       icon: '👤', route: '/dashboard/admin/users',          roles: ['admin'] },
+    { label: 'Laboratorios',   icon: '🏥', route: '/dashboard/admin/labs',            roles: ['admin'] },
+    { label: 'Centros Salud',  icon: '🏨', route: '/dashboard/admin/health-centers',  roles: ['admin'] },
+    { label: 'Pacientes',      icon: '👥', route: '/dashboard/admin/patients',        roles: ['admin', 'lab_operator'] },
+    { label: 'Roles',          icon: '🔑', route: '/dashboard/admin/roles',           roles: ['admin'] },
+    { label: 'Catálogo',       icon: '📚', route: '/dashboard/admin/exam-catalog',    roles: ['admin', 'lab_operator'] },
   ];
 
   visibleNavItems() {

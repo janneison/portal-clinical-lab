@@ -17,20 +17,30 @@ export interface LabOrder {
   idSolicitudKey: string;
   idAdmision: string;
   idAtencion?: string;
+  // GET /orders/{id} may return either camelCase or snake_case field names
   tipoDeDocumento: string;
-  tipoDocumento?: string; // alias usado en el listado
+  tipoDocumento?: string;
   identificacion: string;
   nombreDelPaciente: string;
+  nombre_paciente?: string;       // snake_case alias
   sexo: 'M' | 'F';
   fechaDeNacimiento: string;
+  fecha_nacimiento?: string;      // snake_case alias
   centroDeSalud: string;
+  centro_salud?: string;          // snake_case alias
   fechaDeLaOrden: string;
+  fecha_orden?: string;           // snake_case alias
   medicoQueOrdena: string;
+  medico_ordena?: string;         // snake_case alias
   numeroDeAutorizacion?: string;
   idAliado?: string;
+  id_aliado?: string;             // snake_case alias
   porcEjecucion: number;
+  porc_ejecucion?: number;        // snake_case alias
   estadoDeLaOrden: OrderStatus;
+  estado_orden?: string;          // snake_case alias
   fechaEnvio?: string | null;
+  fecha_envio?: string | null;    // snake_case alias
   detalles: OrderDetail[];
 }
 
