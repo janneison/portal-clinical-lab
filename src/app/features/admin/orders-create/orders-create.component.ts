@@ -1,10 +1,12 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, OnInit } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormArray, ReactiveFormsModule, Validators, AbstractControl } from '@angular/forms';
 import { OrdersService } from '../../../core/services/orders.service';
+import { MedicoService } from '../../../core/services/medico.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { CreateOrderRequest, OrderDetail } from '../../../core/models/order.model';
+import { Medico } from '../../../core/models/medico.model';
 
 @Component({
   selector: 'app-orders-create',
@@ -140,12 +142,50 @@ import { CreateOrderRequest, OrderDetail } from '../../../core/models/order.mode
                 <p class="text-xs text-red-600 mt-1">Requerido</p>
               }
             </div>
-            <div>
+
+            <!-- Médico: selector del catálogo o texto libre -->
+            <div class="sm:col-span-2">
               <label class="label">Médico que ordena *</label>
-              <input type="text" formControlName="medicoQueOrdena" class="input"
-                placeholder="Dr. Nombre Apellido" />
-              @if (f['medicoQueOrdena'].invalid && f['medicoQueOrdena'].touched) {
-                <p class="text-xs text-red-600 mt-1">Requerido</p>
+              <div class="flex gap-2 mb-2">
+                <button type="button"
+                  (click)="medicoMode.set('catalogo')"
+                  class="btn-sm text-xs"
+                  [class.btn-primary]="medicoMode() === 'catalogo'"
+                  [class.btn-secondary]="medicoMode() !== 'catalogo'">
+                  Del catálogo
+                </button>
+                <button type="button"
+                  (click)="medicoMode.set('libre')"
+                  class="btn-sm text-xs"
+                  [class.btn-primary]="medicoMode() === 'libre'"
+                  [class.btn-secondary]="medicoMode() !== 'libre'">
+                  Texto libre
+                </button>
+              </div>
+
+              @if (medicoMode() === 'catalogo') {
+                <select formControlName="medicoId" class="input">
+                  <option [value]="null">— Selecciona un médico —</option>
+                  @for (m of medicos(); track m.id) {
+                    <option [value]="m.id">
+                      {{ m.nombre }}
+                      @if (m.especialidad) { — {{ m.especialidad }} }
+                      ({{ m.tipoDocumento }}: {{ m.identificacion }})
+                    </option>
+                  }
+                </select>
+                @if (medicos().length === 0) {
+                  <p class="text-xs text-gray-400 mt-1">
+                    No hay médicos en el catálogo.
+                    <a routerLink="/dashboard/admin/medicos" class="text-blue-600 hover:underline">Agregar médico →</a>
+                  </p>
+                }
+              } @else {
+                <input type="text" formControlName="medicoQueOrdena" class="input"
+                  placeholder="Dr. Nombre Apellido" />
+                @if (f['medicoQueOrdena'].invalid && f['medicoQueOrdena'].touched) {
+                  <p class="text-xs text-red-600 mt-1">Requerido</p>
+                }
               }
             </div>
           </div>
@@ -245,8 +285,9 @@ import { CreateOrderRequest, OrderDetail } from '../../../core/models/order.mode
     </div>
   `,
 })
-export class OrdersCreateComponent {
+export class OrdersCreateComponent implements OnInit {
   private readonly ordersService = inject(OrdersService);
+  private readonly medicoService = inject(MedicoService);
   private readonly notifications = inject(NotificationService);
   private readonly router = inject(Router);
   private readonly fb = inject(FormBuilder);
@@ -254,6 +295,8 @@ export class OrdersCreateComponent {
   readonly submitting = signal(false);
   readonly submitError = signal('');
   readonly submitted = signal(false);
+  readonly medicos = signal<Medico[]>([]);
+  readonly medicoMode = signal<'catalogo' | 'libre'>('catalogo');
 
   readonly knownLabs = [
     { id: 'ALIADO-001', nombre: 'Laboratorio Clínico Norte' },
@@ -271,11 +314,19 @@ export class OrdersCreateComponent {
     fechaDeNacimiento:    ['', Validators.required],
     centroDeSalud:        ['', Validators.required],
     fechaDeLaOrden:       ['', Validators.required],
-    medicoQueOrdena:      ['', Validators.required],
+    medicoQueOrdena:      [''],
+    medicoId:             [null as number | null],
     numeroDeAutorizacion: [''],
     idAliado:             [''],
     detalles: this.fb.array([this.buildExamGroup()]),
   });
+
+  ngOnInit(): void {
+    this.medicoService.getAll().subscribe({
+      next: (list) => this.medicos.set(list.filter((m) => m.activo)),
+      error: () => this.medicoMode.set('libre'),
+    });
+  }
 
   get f() { return this.form.controls; }
   get detalles(): FormArray { return this.form.get('detalles') as FormArray; }
@@ -320,6 +371,18 @@ export class OrdersCreateComponent {
     const formatDate = (dt: string) =>
       dt ? dt.replace('T', ' ') + ':00' : '';
 
+    // Resolve medico: catalog ID takes priority over free text
+    const medicoId = this.medicoMode() === 'catalogo' && v.medicoId
+      ? Number(v.medicoId)
+      : null;
+
+    // For free-text mode, use the typed name; for catalog mode, find the name
+    let medicoQueOrdena = v.medicoQueOrdena ?? '';
+    if (this.medicoMode() === 'catalogo' && medicoId) {
+      const found = this.medicos().find((m) => m.id === medicoId);
+      medicoQueOrdena = found?.nombre ?? '';
+    }
+
     const payload: CreateOrderRequest = {
       idSolicitudKey:       v.idSolicitudKey!,
       idAdmision:           v.idAdmision!,
@@ -331,7 +394,8 @@ export class OrdersCreateComponent {
       fechaDeNacimiento:    v.fechaDeNacimiento!,
       centroDeSalud:        v.centroDeSalud!,
       fechaDeLaOrden:       formatDate(v.fechaDeLaOrden!),
-      medicoQueOrdena:      v.medicoQueOrdena!,
+      medicoQueOrdena,
+      medicoId:             medicoId ?? undefined,
       numeroDeAutorizacion: v.numeroDeAutorizacion || undefined,
       idAliado:             v.idAliado || undefined,
       detalles: (v.detalles as any[]).map((d) => ({

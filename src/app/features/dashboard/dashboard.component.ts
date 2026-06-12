@@ -166,9 +166,9 @@ export class DashboardComponent implements OnInit {
   ngOnInit(): void {
     // Load recent orders + stats in parallel
     forkJoin({
-      all:       this.ordersService.getOrders({ limit: 5 }),
-      pending:   this.ordersService.getOrders({ estado: 'pending', limit: 1 }),
-      sent:      this.ordersService.getOrders({ estado: 'sent', limit: 1 }),
+      all:       this.ordersService.getOrders({ limit: 10 }),
+      pending:   this.ordersService.getOrders({ estado: 'pending',   limit: 1 }),
+      sent:      this.ordersService.getOrders({ estado: 'sent',      limit: 1 }),
       completed: this.ordersService.getOrders({ estado: 'completed', limit: 1 }),
     }).subscribe({
       next: ({ all, pending, sent, completed }) => {
@@ -181,7 +181,8 @@ export class DashboardComponent implements OnInit {
         ]);
         this.loading.set(false);
       },
-      error: () => {
+      error: (err) => {
+        console.error('[Dashboard] Error cargando órdenes:', err);
         this.loading.set(false);
       },
     });

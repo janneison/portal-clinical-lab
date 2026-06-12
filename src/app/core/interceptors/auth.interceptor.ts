@@ -7,6 +7,12 @@ import { Router } from '@angular/router';
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const authService = inject(AuthService);
   const router = inject(Router);
+
+  // Patient portal uses its own token — skip staff interceptor
+  if (req.url.includes('/patient-portal')) {
+    return next(req);
+  }
+
   const token = authService.token();
 
   const authReq = token

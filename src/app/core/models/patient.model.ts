@@ -7,6 +7,18 @@ export interface Patient {
   nombre: string;
   sexo: 'M' | 'F';
   fechaNacimiento: string;
+  email: string | null;
+  telefono: string | null;
+}
+
+export interface CreatePatientRequest {
+  tipoDocumento: string;
+  identificacion: string;
+  nombre: string;
+  sexo: 'M' | 'F';
+  fechaNacimiento: string;
+  email?: string | null;
+  telefono?: string | null;
 }
 
 export interface PatientDetail extends Patient {

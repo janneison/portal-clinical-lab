@@ -32,6 +32,7 @@ export interface LabOrder {
   fecha_orden?: string;           // snake_case alias
   medicoQueOrdena: string;
   medico_ordena?: string;         // snake_case alias
+  medicoId?: number | null;
   numeroDeAutorizacion?: string;
   idAliado?: string;
   id_aliado?: string;             // snake_case alias
@@ -92,6 +93,10 @@ export interface CreateOrderRequest {
   medicoQueOrdena: string;
   numeroDeAutorizacion?: string;
   idAliado?: string;
+  healthCenterId?: number;
+  medicoId?: number | null;
+  tipoDocumentoMedico?: string | null;
+  identificacionMedico?: string | null;
   porcEjecucion?: string;
   detalles: OrderDetail[];
 }

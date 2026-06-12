@@ -154,6 +154,7 @@ export class OrdersService {
       centroDeSalud:        raw.centroDeSalud          ?? raw.centro_de_salud     ?? raw.centro_salud       ?? '',
       fechaDeLaOrden:       raw.fechaDeLaOrden         ?? raw.fecha_de_la_orden   ?? raw.fecha_orden        ?? '',
       medicoQueOrdena:      raw.medicoQueOrdena        ?? raw.medico_que_ordena   ?? raw.medico_ordena      ?? raw.medico ?? '',
+      medicoId:             raw.medicoId               ?? raw.medico_id           ?? null,
       numeroDeAutorizacion: raw.numeroDeAutorizacion   ?? raw.numero_de_autorizacion ?? raw.numero_autorizacion,
       idAliado:             raw.idAliado              ?? raw.id_aliado,
       porcEjecucion:        raw.porcEjecucion         ?? raw.porc_ejecucion      ?? 0,

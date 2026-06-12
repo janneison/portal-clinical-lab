@@ -18,6 +18,20 @@ export const adminRoutes: Routes = [
           import('./labs/labs.component').then((m) => m.LabsComponent),
       },
       {
+        path: 'medicos',
+        canActivate: [labAdminGuard],
+        loadComponent: () =>
+          import('./medicos/medicos.component').then((m) => m.MedicosComponent),
+      },
+      {
+        path: 'bacteriologos',
+        canActivate: [adminGuard],
+        loadComponent: () =>
+          import('./bacteriologos/bacteriologos.component').then(
+            (m) => m.BacteriologosComponent
+          ),
+      },
+      {
         path: 'health-centers',
         canActivate: [adminGuard],
         loadComponent: () =>

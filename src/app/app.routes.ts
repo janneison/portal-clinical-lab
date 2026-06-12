@@ -8,6 +8,13 @@ export const routes: Routes = [
     pathMatch: 'full',
   },
   {
+    path: 'patient-portal',
+    loadChildren: () =>
+      import('./features/patient-portal/patient-portal.routes').then(
+        (m) => m.patientPortalRoutes
+      ),
+  },
+  {
     path: 'auth',
     canActivate: [guestGuard],
     loadChildren: () =>

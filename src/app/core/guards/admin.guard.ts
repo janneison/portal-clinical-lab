@@ -5,18 +5,15 @@ import { AuthService } from '../services/auth.service';
 export const adminGuard: CanActivateFn = () => {
   const auth = inject(AuthService);
   const router = inject(Router);
-
-  if (auth.isAdmin()) return true;
-
+  // Use permission-based check — no role name hardcoded
+  if (auth.canRegisterUsers()) return true;
   return router.createUrlTree(['/dashboard']);
 };
 
-/** Allows admin and lab_operator */
+/** Allows anyone who can create or view orders (admin + lab_operator) */
 export const labAdminGuard: CanActivateFn = () => {
   const auth = inject(AuthService);
   const router = inject(Router);
-
-  if (auth.isAdmin() || auth.isLabOperator()) return true;
-
+  if (auth.canCreateOrder() || auth.canViewPatients() || auth.canEditExamCatalog()) return true;
   return router.createUrlTree(['/dashboard']);
 };

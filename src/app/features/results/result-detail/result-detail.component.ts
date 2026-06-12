@@ -1,22 +1,25 @@
 import { Component, inject, signal, OnInit, input, computed } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { forkJoin, of } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 import { OrdersService } from '../../../core/services/orders.service';
 import { ResultsService } from '../../../core/services/results.service';
 import { NotificationService } from '../../../core/services/notification.service';
+import { AuthService } from '../../../core/services/auth.service';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
 import { CriticalAlertComponent } from '../../../shared/components/critical-alert/critical-alert.component';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 import { LabOrder } from '../../../core/models/order.model';
-import { LabResult, valuesToRows } from '../../../core/models/result.model';
+import { LabResult, valuesToRows, SENSIBILIDAD_CONFIG } from '../../../core/models/result.model';
 @Component({
   selector: 'app-result-detail',
   standalone: true,
   imports: [
     RouterLink,
     CommonModule,
+    FormsModule,
     LoadingSpinnerComponent,
     CriticalAlertComponent,
     StatusBadgeComponent,
@@ -68,6 +71,17 @@ import { LabResult, valuesToRows } from '../../../core/models/result.model';
               }
             </div>
             <div class="flex gap-2 flex-wrap">
+              <button (click)="viewPdf()" class="btn-secondary btn-sm" [disabled]="pdfLoading()">
+                @if (pdfLoading()) {
+                  <span class="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></span>
+                } @else {
+                  📄
+                }
+                Ver PDF
+              </button>
+              @if (authService.canSendResultEmail()) {
+                <button (click)="openEmailModal()" class="btn-secondary btn-sm">📧 Enviar email</button>
+              }
               <button (click)="download()" class="btn-secondary btn-sm">⬇️ Descargar</button>
               <button (click)="share()" class="btn-secondary btn-sm">📤 Compartir</button>
               <button (click)="print()" class="btn-secondary btn-sm">🖨️ Imprimir</button>
@@ -148,6 +162,9 @@ import { LabResult, valuesToRows } from '../../../core/models/result.model';
                           principal
                         </span>
                       }
+                      @if (row.comentario) {
+                        <p class="text-xs text-gray-400 italic mt-0.5">{{ row.comentario }}</p>
+                      }
                     </td>
                     <td>
                       <span
@@ -185,6 +202,118 @@ import { LabResult, valuesToRows } from '../../../core/models/result.model';
           </div>
         </div>
 
+        <!-- Bacteriólogo -->
+        @if (result()!.bacteriologo) {
+          <div class="card p-5">
+            <h2 class="font-semibold text-gray-900 mb-4">👩‍🔬 Bacteriólogo responsable</h2>
+            <div class="flex items-start gap-4">
+              <!-- Firma -->
+              <div class="w-20 h-20 rounded-xl overflow-hidden bg-gray-50 border border-gray-200 flex-shrink-0 flex items-center justify-center">
+                @if (result()!.bacteriologo!.firmaPath) {
+                  <img [src]="apiBase + result()!.bacteriologo!.firmaPath" alt="Firma digital"
+                    class="w-full h-full object-contain p-2" />
+                } @else {
+                  <div class="text-center">
+                    <span class="text-2xl">✍️</span>
+                    <p class="text-xs text-gray-400 mt-1">Sin firma</p>
+                  </div>
+                }
+              </div>
+              <!-- Info -->
+              <dl class="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                <div>
+                  <dt class="text-xs text-gray-400">Nombre</dt>
+                  <dd class="font-semibold text-gray-900">{{ result()!.bacteriologo!.nombre }}</dd>
+                </div>
+                <div>
+                  <dt class="text-xs text-gray-400">Documento</dt>
+                  <dd class="text-gray-700">
+                    {{ result()!.bacteriologo!.tipoDocumento }}: {{ result()!.bacteriologo!.identificacion }}
+                  </dd>
+                </div>
+                @if (result()!.bacteriologo!.tarjetaProfesional) {
+                  <div>
+                    <dt class="text-xs text-gray-400">Tarjeta profesional</dt>
+                    <dd class="text-blue-700 font-medium">{{ result()!.bacteriologo!.tarjetaProfesional }}</dd>
+                  </div>
+                }
+                @if (result()!.bacteriologo!.universidad) {
+                  <div>
+                    <dt class="text-xs text-gray-400">Universidad</dt>
+                    <dd class="text-gray-700">{{ result()!.bacteriologo!.universidad }}</dd>
+                  </div>
+                }
+              </dl>
+            </div>
+          </div>
+        }
+
+        <!-- Antibiograma -->
+        @if (result()!.antibiogramas && result()!.antibiogramas!.length > 0) {
+          <div class="card overflow-hidden">
+            <div class="px-5 py-4 border-b border-amber-100 bg-amber-50">
+              <h2 class="font-semibold text-amber-800">🧫 Antibiograma</h2>
+            </div>
+            @for (abg of result()!.antibiogramas!; track $index) {
+              <div class="p-5 border-b border-gray-100 last:border-0">
+                <!-- Bacteria header -->
+                <div class="flex flex-wrap items-center gap-3 mb-3">
+                  <p class="font-bold text-gray-900">{{ abg.bacteriaAislada }}</p>
+                  @if (abg.gram !== 'n/a') {
+                    <span class="badge text-xs"
+                      [class]="abg.gram === 'positivo' ? 'bg-purple-100 text-purple-700' : 'bg-pink-100 text-pink-700'">
+                      Gram {{ abg.gram }}
+                    </span>
+                  }
+                  @if (abg.tiempoIncubacion) {
+                    <span class="text-xs text-gray-400">⏱ {{ abg.tiempoIncubacion }}</span>
+                  }
+                </div>
+                @if (abg.gramOrina) {
+                  <p class="text-sm text-gray-500 mb-1">
+                    <span class="font-medium">Gram orina:</span> {{ abg.gramOrina }}
+                  </p>
+                }
+                @if (abg.observaciones) {
+                  <p class="text-sm text-gray-500 italic mb-3">{{ abg.observaciones }}</p>
+                }
+
+                @if (abg.items && abg.items.length > 0) {
+                  <div class="table-container rounded-xl border border-gray-200 mt-3">
+                    <table class="table text-sm">
+                      <thead>
+                        <tr>
+                          <th>Antibiótico</th>
+                          <th class="text-center">CIM</th>
+                          <th class="text-center w-36">Sensibilidad</th>
+                          <th>Método</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (item of abg.items; track item.antibiotico) {
+                          <tr>
+                            <td class="font-medium text-gray-800">{{ item.antibiotico }}</td>
+                            <td class="text-center font-mono text-gray-600 text-xs">{{ item.cim }}</td>
+                            <td class="text-center">
+                              <span class="badge text-xs font-bold"
+                                [class]="SENSIBILIDAD_CONFIG[item.sensibilidad].class">
+                                {{ item.sensibilidad }} — {{ SENSIBILIDAD_CONFIG[item.sensibilidad].label }}
+                              </span>
+                            </td>
+                            <td class="text-gray-500 text-xs">{{ item.metodo }}</td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                } @else {
+                  <p class="text-sm text-gray-400 italic">Sin antibióticos (cultivo negativo)</p>
+                }
+              </div>
+            }
+          </div>
+        }
+
         <!-- Attachment -->
         @if (result()!.attachmentPath) {
           <div class="card p-5">
@@ -206,6 +335,48 @@ import { LabResult, valuesToRows } from '../../../core/models/result.model';
         }
       }
     </div>
+
+    <!-- Email modal -->
+    @if (showEmailModal()) {
+      <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/40" (click)="closeEmailModal()"></div>
+        <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-md">
+          <div class="p-6 border-b border-gray-100">
+            <h2 class="text-lg font-bold text-gray-900">Enviar resultados por email</h2>
+            <p class="text-sm text-gray-500 mt-0.5">
+              Orden: <span class="font-mono font-semibold">{{ orderId() }}</span>
+            </p>
+          </div>
+          <div class="p-6 space-y-4">
+            <div>
+              <label class="label">Destinatario</label>
+              <input type="email" [(ngModel)]="emailDest" class="input"
+                placeholder="correo@paciente.com (vacío = usa email del paciente)" />
+              <p class="text-xs text-gray-400 mt-1">Si se deja vacío, se usa el email del paciente</p>
+            </div>
+            <div>
+              <label class="label">Mensaje personalizado</label>
+              <textarea [(ngModel)]="emailMsg" class="input resize-none" rows="3"
+                placeholder="Estimado paciente, adjunto sus resultados..."></textarea>
+            </div>
+            @if (emailError()) {
+              <div class="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">
+                {{ emailError() }}
+              </div>
+            }
+            <div class="flex gap-3 pt-2">
+              <button (click)="closeEmailModal()" class="btn-secondary flex-1">Cancelar</button>
+              <button (click)="sendEmail()" class="btn-primary flex-1" [disabled]="emailSending()">
+                @if (emailSending()) {
+                  <span class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                }
+                📧 Enviar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    }
   `,
 })
 export class ResultDetailComponent implements OnInit {
@@ -215,15 +386,31 @@ export class ResultDetailComponent implements OnInit {
   private readonly ordersService = inject(OrdersService);
   private readonly resultsService = inject(ResultsService);
   private readonly notifications = inject(NotificationService);
+  readonly authService = inject(AuthService);
 
   readonly loading = signal(true);
   readonly error = signal('');
   readonly order = signal<LabOrder | null>(null);
   readonly result = signal<LabResult | null>(null);
+  readonly apiBase = 'http://localhost:8080';
+
+  // PDF
+  readonly pdfLoading = signal(false);
+
+  // Email modal
+  readonly showEmailModal = signal(false);
+  readonly emailSending = signal(false);
+  readonly emailError = signal('');
+  emailDest = '';
+  emailMsg  = '';
 
   readonly rows = computed(() =>
-    valuesToRows(this.result()?.valuesJson ?? this.result()?.values ?? { resultado: '' })
+    valuesToRows(
+      this.result()?.valuesJson ?? this.result()?.values ?? { resultado: '' },
+      this.result()?.valoresEstructurados
+    )
   );
+  readonly SENSIBILIDAD_CONFIG = SENSIBILIDAD_CONFIG;
 
   ngOnInit(): void {
     forkJoin({
@@ -308,5 +495,65 @@ export class ResultDetailComponent implements OnInit {
 
   print(): void {
     window.print();
+  }
+
+  // ─── PDF ──────────────────────────────────────────────────────────────────
+
+  viewPdf(): void {
+    this.pdfLoading.set(true);
+    this.resultsService.downloadPdf(this.orderId()).subscribe({
+      next: (blob) => {
+        const pdfBlob = new Blob([blob], { type: 'application/pdf' });
+        const url = URL.createObjectURL(pdfBlob);
+        const tab = window.open(url, '_blank');
+        if (tab) {
+          tab.addEventListener('load', () => URL.revokeObjectURL(url), { once: true });
+        } else {
+          const a = document.createElement('a');
+          a.href = url;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(url), 5000);
+        }
+        this.pdfLoading.set(false);
+      },
+      error: (err: Error) => {
+        this.notifications.error('Error al generar PDF', err.message);
+        this.pdfLoading.set(false);
+      },
+    });
+  }
+
+  // ─── Email ────────────────────────────────────────────────────────────────
+
+  openEmailModal(): void {
+    this.emailDest = '';
+    this.emailMsg  = '';
+    this.emailError.set('');
+    this.showEmailModal.set(true);
+  }
+
+  closeEmailModal(): void { this.showEmailModal.set(false); }
+
+  sendEmail(): void {
+    this.emailSending.set(true);
+    this.emailError.set('');
+    this.resultsService.sendEmail(this.orderId(), {
+      email:   this.emailDest.trim() || undefined,
+      mensaje: this.emailMsg.trim()  || undefined,
+    }).subscribe({
+      next: (res) => {
+        this.notifications.success('Email enviado', `Enviado a ${res.emailDestino}`);
+        this.closeEmailModal();
+        this.emailSending.set(false);
+      },
+      error: (err: Error) => {
+        this.emailError.set(err.message);
+        this.emailSending.set(false);
+      },
+    });
   }
 }

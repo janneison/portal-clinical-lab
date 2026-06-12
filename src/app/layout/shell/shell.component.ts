@@ -9,6 +9,7 @@ interface NavItem {
   route: string;
   roles?: string[];
   divider?: boolean;
+  permKey?: keyof import('../../core/models/auth.model').UserPermissions;
 }
 
 @Component({
@@ -107,7 +108,7 @@ interface NavItem {
             <span class="text-gray-500">☰</span>
           </button>
           <div class="flex-1"></div>
-          @if (authService.isLabOperator()) {
+          @if (authService.canCreateOrder()) {
             <a routerLink="/dashboard/orders/create" class="btn-primary btn-sm">
               + Nueva orden
             </a>
@@ -140,19 +141,25 @@ export class ShellComponent {
     { label: 'Resultados',   icon: '🔬', route: '/dashboard/results' },
     // Admin section
     { label: 'Administración', icon: '', route: '', roles: ['admin'], divider: true },
-    { label: 'Usuarios',       icon: '👤', route: '/dashboard/admin/users',          roles: ['admin'] },
-    { label: 'Laboratorios',   icon: '🏥', route: '/dashboard/admin/labs',            roles: ['admin'] },
-    { label: 'Centros Salud',  icon: '🏨', route: '/dashboard/admin/health-centers',  roles: ['admin'] },
-    { label: 'Pacientes',      icon: '👥', route: '/dashboard/admin/patients',        roles: ['admin', 'lab_operator'] },
+    { label: 'Usuarios',       icon: '👤', route: '/dashboard/admin/users',          roles: ['admin'], permKey: 'canRegisterUsers' },
+    { label: 'Laboratorios',   icon: '🏥', route: '/dashboard/admin/labs',            roles: ['admin'], permKey: 'canEditAliado' },
+    { label: 'Bacteriólogos',  icon: '👩‍🔬', route: '/dashboard/admin/bacteriologos',  roles: ['admin', 'lab_operator'], permKey: 'canCreateBacteriologo' },
+    { label: 'Médicos',        icon: '👨‍⚕️', route: '/dashboard/admin/medicos',         roles: ['admin', 'lab_operator'] },
+    { label: 'Centros Salud',  icon: '🏨', route: '/dashboard/admin/health-centers',  roles: ['admin'], permKey: 'canCreateHealthCenter' },
+    { label: 'Pacientes',      icon: '👥', route: '/dashboard/admin/patients',        roles: ['admin', 'lab_operator'], permKey: 'canViewPatients' },
     { label: 'Roles',          icon: '🔑', route: '/dashboard/admin/roles',           roles: ['admin'] },
-    { label: 'Catálogo',       icon: '📚', route: '/dashboard/admin/exam-catalog',    roles: ['admin', 'lab_operator'] },
+    { label: 'Catálogo',       icon: '📚', route: '/dashboard/admin/exam-catalog',    roles: ['admin', 'lab_operator'], permKey: 'canEditExamCatalog' },
   ];
 
   visibleNavItems() {
-    const role = this.authService.currentUser()?.role;
-    return this.navItems.filter(
-      (item) => !item.roles || item.roles.includes(role ?? '')
-    );
+    const perms = this.authService.currentUser()?.permissions;
+    const role  = this.authService.currentUser()?.role ?? '';
+    return this.navItems.filter((item) => {
+      if (!item.roles) return true;
+      // Map permission-based visibility
+      if (item.permKey) return (perms as any)?.[item.permKey] ?? item.roles.includes(role);
+      return item.roles.includes(role);
+    });
   }
 
   userInitial(): string {

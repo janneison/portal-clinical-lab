@@ -1,13 +1,13 @@
 import { Component, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { Router, ActivatedRoute } from '@angular/router';
+import { Router, ActivatedRoute, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { NotificationService } from '../../../core/services/notification.service';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, RouterLink],
   template: `
     <div class="min-h-screen bg-gradient-to-br from-primary-900 via-primary-800 to-primary-700 flex items-center justify-center p-4">
       <div class="w-full max-w-md">
@@ -79,6 +79,15 @@ import { NotificationService } from '../../../core/services/notification.service
               </div>
             }
 
+            <div class="text-right -mt-1">
+              <a
+                routerLink="/auth/forgot-password"
+                class="text-xs text-primary-600 hover:text-primary-800 transition-colors"
+              >
+                ¿Olvidaste tu contraseña?
+              </a>
+            </div>
+
             <button
               type="submit"
               class="btn-primary w-full btn-lg"
@@ -96,6 +105,12 @@ import { NotificationService } from '../../../core/services/notification.service
 
         <p class="text-center text-primary-300 text-xs mt-6">
           © {{ year }} Clinical Lab — Todos los derechos reservados
+        </p>
+        <p class="text-center mt-2">
+          <a routerLink="/patient-portal/login"
+            class="text-blue-300 hover:text-white text-xs transition-colors">
+            ¿Eres paciente? Consulta tus resultados →
+          </a>
         </p>
       </div>
     </div>

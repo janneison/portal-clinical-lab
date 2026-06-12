@@ -77,7 +77,7 @@ import { environment } from '@environments/environment';
 
             <!-- Actions -->
             <div class="flex gap-2 flex-wrap">
-              @if (authService.isLabOperator() && order()!.estadoDeLaOrden === 'pending') {
+              @if (authService.canSendOrder() && order()!.estadoDeLaOrden === 'pending') {
                 <button
                   (click)="sendOrder()"
                   class="btn-primary btn-sm"

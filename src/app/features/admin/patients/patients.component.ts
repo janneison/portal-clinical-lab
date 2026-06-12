@@ -1,26 +1,29 @@
 import { Component, inject, signal, OnInit } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
+import { FormBuilder, ReactiveFormsModule, Validators, FormsModule } from '@angular/forms';
 import { PatientService } from '../../../core/services/patient.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
 import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
-import { Patient, PatientDetail, PatientsPage } from '../../../core/models/patient.model';
+import { Patient, PatientDetail, PatientsPage, CreatePatientRequest } from '../../../core/models/patient.model';
 
 @Component({
   selector: 'app-patients',
   standalone: true,
-  imports: [RouterLink, CommonModule, FormsModule, LoadingSpinnerComponent, EmptyStateComponent, StatusBadgeComponent],
+  imports: [RouterLink, CommonModule, FormsModule, ReactiveFormsModule, LoadingSpinnerComponent, EmptyStateComponent, StatusBadgeComponent],
   template: `
     <div class="space-y-6">
       <!-- Header -->
-      <div>
-        <h1 class="text-2xl font-bold text-gray-900">Pacientes</h1>
-        <p class="text-gray-500 text-sm mt-1">
-          Los pacientes se crean automáticamente al registrar una orden
-        </p>
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-2xl font-bold text-gray-900">Pacientes</h1>
+          <p class="text-gray-500 text-sm mt-1">
+            Los pacientes también se crean automáticamente al registrar una orden
+          </p>
+        </div>
+        <button (click)="openCreate()" class="btn-primary">+ Nuevo paciente</button>
       </div>
 
       <!-- Search -->
@@ -69,6 +72,8 @@ import { Patient, PatientDetail, PatientsPage } from '../../../core/models/patie
                     <th>Nombre</th>
                     <th class="text-center">Sexo</th>
                     <th>Fecha nacimiento</th>
+                    <th>Email</th>
+                    <th>Teléfono</th>
                     <th class="text-right">Acciones</th>
                   </tr>
                 </thead>
@@ -92,13 +97,15 @@ import { Patient, PatientDetail, PatientsPage } from '../../../core/models/patie
                       <td class="text-gray-500 text-sm">
                         {{ patient.fechaNacimiento | date:'dd/MM/yyyy' }}
                       </td>
+                      <td class="text-gray-500 text-sm">{{ patient.email || '—' }}</td>
+                      <td class="text-gray-500 text-sm">{{ patient.telefono || '—' }}</td>
                       <td class="text-right">
-                        <button
-                          (click)="openDetail(patient)"
-                          class="btn-secondary btn-sm"
-                        >
-                          Ver historial →
-                        </button>
+                        <div class="flex justify-end gap-1">
+                          <button (click)="openEdit(patient)" class="btn-ghost btn-sm text-xs" title="Editar">✏️</button>
+                          <button (click)="openDetail(patient)" class="btn-secondary btn-sm">
+                            Ver historial →
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   }
@@ -109,26 +116,20 @@ import { Patient, PatientDetail, PatientsPage } from '../../../core/models/patie
             <!-- Pagination -->
             @if (page()!.pagination.total_pages > 1) {
               <div class="flex items-center justify-between px-4 py-3 border-t border-gray-100">
-                <button
-                  (click)="goToPage(page()!.pagination.page - 1)"
-                  class="btn-secondary btn-sm"
-                  [disabled]="page()!.pagination.page <= 1"
-                >← Anterior</button>
+                <button (click)="goToPage(page()!.pagination.page - 1)" class="btn-secondary btn-sm"
+                  [disabled]="page()!.pagination.page <= 1">← Anterior</button>
                 <span class="text-sm text-gray-500">
                   {{ page()!.pagination.page }} / {{ page()!.pagination.total_pages }}
                 </span>
-                <button
-                  (click)="goToPage(page()!.pagination.page + 1)"
-                  class="btn-secondary btn-sm"
-                  [disabled]="page()!.pagination.page >= page()!.pagination.total_pages"
-                >Siguiente →</button>
+                <button (click)="goToPage(page()!.pagination.page + 1)" class="btn-secondary btn-sm"
+                  [disabled]="page()!.pagination.page >= page()!.pagination.total_pages">Siguiente →</button>
               </div>
             }
           }
         </div>
       } @else {
         <app-empty-state icon="👤" title="Busca un paciente"
-          description="Ingresa un nombre o número de documento para buscar" />
+          description="Ingresa un nombre o número de documento para buscar, o crea uno nuevo" />
       }
     </div>
 
@@ -146,7 +147,6 @@ import { Patient, PatientDetail, PatientsPage } from '../../../core/models/patie
             <div class="p-6"><app-loading-spinner message="Cargando historial..." /></div>
           } @else if (patientDetail()) {
             <div class="p-6 space-y-6">
-              <!-- Patient info -->
               <div class="card p-5">
                 <div class="flex items-center gap-4 mb-4">
                   <div class="w-14 h-14 rounded-full flex items-center justify-center text-2xl flex-shrink-0"
@@ -171,10 +171,21 @@ import { Patient, PatientDetail, PatientsPage } from '../../../core/models/patie
                     <dt class="text-gray-400 text-xs">Total de órdenes</dt>
                     <dd class="font-bold text-blue-700 text-lg">{{ patientDetail()!.totalOrdenes }}</dd>
                   </div>
+                  @if (patientDetail()!.email) {
+                    <div>
+                      <dt class="text-gray-400 text-xs">Email</dt>
+                      <dd class="font-medium text-gray-900">{{ patientDetail()!.email }}</dd>
+                    </div>
+                  }
+                  @if (patientDetail()!.telefono) {
+                    <div>
+                      <dt class="text-gray-400 text-xs">Teléfono</dt>
+                      <dd class="font-medium text-gray-900">{{ patientDetail()!.telefono }}</dd>
+                    </div>
+                  }
                 </dl>
               </div>
 
-              <!-- Orders history -->
               <div>
                 <h3 class="font-semibold text-gray-900 mb-3">Historial de órdenes</h3>
                 @if (patientDetail()!.ordenes.length === 0) {
@@ -200,10 +211,8 @@ import { Patient, PatientDetail, PatientsPage } from '../../../core/models/patie
                             </span>
                           }
                         </div>
-                        <a
-                          [routerLink]="['/dashboard/orders', order.idSolicitudKey]"
-                          class="btn-ghost btn-sm text-xs mt-2 w-full justify-center"
-                        >
+                        <a [routerLink]="['/dashboard/orders', order.idSolicitudKey]"
+                          class="btn-ghost btn-sm text-xs mt-2 w-full justify-center">
                           Ver orden →
                         </a>
                       </div>
@@ -216,17 +225,245 @@ import { Patient, PatientDetail, PatientsPage } from '../../../core/models/patie
         </div>
       </div>
     }
+
+    <!-- Modal editar paciente -->
+    @if (showEditModal()) {
+      <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/40" (click)="closeEdit()"></div>
+        <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div class="p-6 border-b border-gray-100">
+            <h2 class="text-lg font-bold text-gray-900">Editar paciente</h2>
+            <p class="text-sm text-gray-500 mt-0.5 font-mono">
+              {{ editingPatient()?.tipoDocumento }}: {{ editingPatient()?.identificacion }}
+            </p>
+          </div>
+          <form [formGroup]="editForm" (ngSubmit)="submitEdit()" class="p-6 space-y-4">
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="label">Tipo documento *</label>
+                <select formControlName="tipoDocumento" class="input">
+                  <option value="">Selecciona</option>
+                  <option value="CC">CC — Cédula</option>
+                  <option value="TI">TI — Tarjeta Identidad</option>
+                  <option value="PA">PA — Pasaporte</option>
+                  <option value="CE">CE — Cédula Extranjería</option>
+                  <option value="RC">RC — Registro Civil</option>
+                  <option value="MS">MS — Menor sin ID</option>
+                </select>
+                @if (ef['tipoDocumento'].invalid && ef['tipoDocumento'].touched) {
+                  <p class="text-xs text-red-600 mt-1">Requerido</p>
+                }
+              </div>
+              <div>
+                <label class="label">Número de documento *</label>
+                <input type="text" formControlName="identificacion" class="input" />
+                @if (ef['identificacion'].invalid && ef['identificacion'].touched) {
+                  <p class="text-xs text-red-600 mt-1">Requerido</p>
+                }
+              </div>
+            </div>
+            <div>
+              <label class="label">Nombre completo *</label>
+              <input type="text" formControlName="nombre" class="input" />
+              @if (ef['nombre'].invalid && ef['nombre'].touched) {
+                <p class="text-xs text-red-600 mt-1">Requerido</p>
+              }
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="label">Sexo *</label>
+                <select formControlName="sexo" class="input">
+                  <option value="">Selecciona</option>
+                  <option value="M">Masculino</option>
+                  <option value="F">Femenino</option>
+                </select>
+                @if (ef['sexo'].invalid && ef['sexo'].touched) {
+                  <p class="text-xs text-red-600 mt-1">Requerido</p>
+                }
+              </div>
+              <div>
+                <label class="label">Fecha de nacimiento *</label>
+                <input type="date" formControlName="fechaNacimiento" class="input" />
+                @if (ef['fechaNacimiento'].invalid && ef['fechaNacimiento'].touched) {
+                  <p class="text-xs text-red-600 mt-1">Requerido</p>
+                }
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="label">Email</label>
+                <input type="email" formControlName="email" class="input" placeholder="correo@ejemplo.com" />
+              </div>
+              <div>
+                <label class="label">Teléfono</label>
+                <input type="tel" formControlName="telefono" class="input" placeholder="3001234567" />
+              </div>
+            </div>
+            @if (editError()) {
+              <div class="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">
+                {{ editError() }}
+              </div>
+            }
+            <div class="flex gap-3 pt-2">
+              <button type="button" (click)="closeEdit()" class="btn-secondary flex-1">Cancelar</button>
+              <button type="submit" class="btn-primary flex-1" [disabled]="updating()">
+                @if (updating()) {
+                  <span class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                }
+                Guardar cambios
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    }
+
+    <!-- Modal crear paciente -->
+    @if (showCreateModal()) {      <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/40" (click)="closeCreate()"></div>
+        <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div class="p-6 border-b border-gray-100">
+            <h2 class="text-lg font-bold text-gray-900">Nuevo paciente</h2>
+            <p class="text-sm text-gray-500 mt-0.5">
+              Los pacientes también se crean automáticamente al registrar una orden
+            </p>
+          </div>
+          <form [formGroup]="createForm" (ngSubmit)="submitCreate()" class="p-6 space-y-4">
+            <!-- Documento -->
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="label">Tipo documento *</label>
+                <select formControlName="tipoDocumento" class="input">
+                  <option value="">Selecciona</option>
+                  <option value="CC">CC — Cédula</option>
+                  <option value="TI">TI — Tarjeta Identidad</option>
+                  <option value="PA">PA — Pasaporte</option>
+                  <option value="CE">CE — Cédula Extranjería</option>
+                  <option value="RC">RC — Registro Civil</option>
+                  <option value="MS">MS — Menor sin ID</option>
+                </select>
+                @if (f['tipoDocumento'].invalid && f['tipoDocumento'].touched) {
+                  <p class="text-xs text-red-600 mt-1">Requerido</p>
+                }
+              </div>
+              <div>
+                <label class="label">Número de documento *</label>
+                <input type="text" formControlName="identificacion" class="input" placeholder="1020304050" />
+                @if (f['identificacion'].invalid && f['identificacion'].touched) {
+                  <p class="text-xs text-red-600 mt-1">Requerido</p>
+                }
+              </div>
+            </div>
+
+            <!-- Nombre -->
+            <div>
+              <label class="label">Nombre completo *</label>
+              <input type="text" formControlName="nombre" class="input" placeholder="Carlos Andrés Pérez López" />
+              @if (f['nombre'].invalid && f['nombre'].touched) {
+                <p class="text-xs text-red-600 mt-1">Requerido</p>
+              }
+            </div>
+
+            <!-- Sexo y fecha nacimiento -->
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="label">Sexo *</label>
+                <select formControlName="sexo" class="input">
+                  <option value="">Selecciona</option>
+                  <option value="M">Masculino</option>
+                  <option value="F">Femenino</option>
+                </select>
+                @if (f['sexo'].invalid && f['sexo'].touched) {
+                  <p class="text-xs text-red-600 mt-1">Requerido</p>
+                }
+              </div>
+              <div>
+                <label class="label">Fecha de nacimiento *</label>
+                <input type="date" formControlName="fechaNacimiento" class="input" />
+                @if (f['fechaNacimiento'].invalid && f['fechaNacimiento'].touched) {
+                  <p class="text-xs text-red-600 mt-1">Requerido</p>
+                }
+              </div>
+            </div>
+
+            <!-- Contacto -->
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="label">Email</label>
+                <input type="email" formControlName="email" class="input" placeholder="correo@ejemplo.com" />
+              </div>
+              <div>
+                <label class="label">Teléfono</label>
+                <input type="tel" formControlName="telefono" class="input" placeholder="3001234567" />
+              </div>
+            </div>
+
+            @if (createError()) {
+              <div class="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">
+                {{ createError() }}
+              </div>
+            }
+
+            <div class="flex gap-3 pt-2">
+              <button type="button" (click)="closeCreate()" class="btn-secondary flex-1">Cancelar</button>
+              <button type="submit" class="btn-primary flex-1" [disabled]="creating()">
+                @if (creating()) {
+                  <span class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                }
+                Crear paciente
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    }
   `,
 })
 export class PatientsComponent implements OnInit {
   private readonly service = inject(PatientService);
   private readonly notifications = inject(NotificationService);
+  private readonly fb = inject(FormBuilder);
 
   readonly loading = signal(false);
   readonly loadingDetail = signal(false);
   readonly page = signal<PatientsPage | null>(null);
   readonly selectedPatient = signal<Patient | null>(null);
   readonly patientDetail = signal<PatientDetail | null>(null);
+
+  // Create
+  readonly showCreateModal = signal(false);
+  readonly creating = signal(false);
+  readonly createError = signal('');
+
+  readonly createForm = this.fb.group({
+    tipoDocumento:   ['', Validators.required],
+    identificacion:  ['', Validators.required],
+    nombre:          ['', Validators.required],
+    sexo:            ['', Validators.required],
+    fechaNacimiento: ['', Validators.required],
+    email:           [''],
+    telefono:        [''],
+  });
+
+  get f() { return this.createForm.controls; }
+
+  // Edit
+  readonly showEditModal = signal(false);
+  readonly updating = signal(false);
+  readonly editError = signal('');
+  readonly editingPatient = signal<Patient | null>(null);
+
+  readonly editForm = this.fb.group({
+    tipoDocumento:   ['', Validators.required],
+    identificacion:  ['', Validators.required],
+    nombre:          ['', Validators.required],
+    sexo:            ['', Validators.required],
+    fechaNacimiento: ['', Validators.required],
+    email:           [''],
+    telefono:        [''],
+  });
+
+  get ef() { return this.editForm.controls; }
 
   searchQuery = '';
   private currentPage = 1;
@@ -268,5 +505,105 @@ export class PatientsComponent implements OnInit {
   closeDetail(): void {
     this.selectedPatient.set(null);
     this.patientDetail.set(null);
+  }
+
+  // ─── Create ───────────────────────────────────────────────────────────────
+
+  openCreate(): void {
+    this.createForm.reset();
+    this.createError.set('');
+    this.showCreateModal.set(true);
+  }
+
+  closeCreate(): void { this.showCreateModal.set(false); }
+
+  submitCreate(): void {
+    if (this.createForm.invalid) { this.createForm.markAllAsTouched(); return; }
+    this.creating.set(true);
+    this.createError.set('');
+    const v = this.createForm.value;
+
+    const payload: CreatePatientRequest = {
+      tipoDocumento:   v.tipoDocumento!,
+      identificacion:  v.identificacion!,
+      nombre:          v.nombre!,
+      sexo:            v.sexo as 'M' | 'F',
+      fechaNacimiento: v.fechaNacimiento!,
+      email:           v.email   || null,
+      telefono:        v.telefono || null,
+    };
+
+    this.service.createPatient(payload).subscribe({
+      next: (created) => {
+        // Add to current list if page is loaded
+        if (this.page()) {
+          this.page.update((p) => p ? {
+            ...p,
+            data: [created, ...p.data],
+            pagination: { ...p.pagination, total: p.pagination.total + 1 },
+          } : p);
+        }
+        this.notifications.success('Paciente creado', created.nombre);
+        this.closeCreate();
+        this.creating.set(false);
+      },
+      error: (err: Error) => {
+        this.createError.set(err.message);
+        this.creating.set(false);
+      },
+    });
+  }
+
+  // ─── Edit ─────────────────────────────────────────────────────────────────
+
+  openEdit(patient: Patient): void {
+    this.editingPatient.set(patient);
+    this.editForm.patchValue({
+      tipoDocumento:   patient.tipoDocumento,
+      identificacion:  patient.identificacion,
+      nombre:          patient.nombre,
+      sexo:            patient.sexo,
+      fechaNacimiento: patient.fechaNacimiento,
+      email:           patient.email    ?? '',
+      telefono:        patient.telefono ?? '',
+    });
+    this.editError.set('');
+    this.showEditModal.set(true);
+  }
+
+  closeEdit(): void { this.showEditModal.set(false); }
+
+  submitEdit(): void {
+    if (this.editForm.invalid) { this.editForm.markAllAsTouched(); return; }
+    const patient = this.editingPatient();
+    if (!patient) return;
+
+    this.updating.set(true);
+    this.editError.set('');
+    const v = this.editForm.value;
+
+    this.service.updatePatient(patient.id, {
+      tipoDocumento:   v.tipoDocumento!,
+      identificacion:  v.identificacion!,
+      nombre:          v.nombre!,
+      sexo:            v.sexo as 'M' | 'F',
+      fechaNacimiento: v.fechaNacimiento!,
+      email:           v.email    || null,
+      telefono:        v.telefono || null,
+    }).subscribe({
+      next: (updated) => {
+        this.page.update((p) => p ? {
+          ...p,
+          data: p.data.map((x) => x.id === patient.id ? updated : x),
+        } : p);
+        this.notifications.success('Paciente actualizado', updated.nombre);
+        this.closeEdit();
+        this.updating.set(false);
+      },
+      error: (err: Error) => {
+        this.editError.set(err.message);
+        this.updating.set(false);
+      },
+    });
   }
 }

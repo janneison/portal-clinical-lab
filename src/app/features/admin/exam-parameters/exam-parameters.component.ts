@@ -109,13 +109,13 @@ import {
                         [class]="param.tipoResultado === 'numerico' ? 'bg-blue-100 text-blue-700' :
                                  param.tipoResultado === 'booleano' ? 'bg-purple-100 text-purple-700' :
                                  'bg-gray-100 text-gray-600'">
-                        {{ tipoResultadoLabels[param.tipoResultado] ?? param.tipoResultado }}
+                        {{ tipoResultadoLabels[param.tipoResultado] }}
                       </span>
                     </td>
                     <td class="text-gray-500 text-sm">{{ param.unidad || '—' }}</td>
                     <td class="text-center">
                       @if (param.tipoResultado === 'booleano') {
-                        <span class="text-xs text-purple-600">{{ etiquetaLabels[param.etiquetaBooleano!] ?? '—' }}</span>
+                        <span class="text-xs text-purple-600">{{ param.etiquetaBooleano ? etiquetaLabels[param.etiquetaBooleano] : '—' }}</span>
                       } @else if (param.valorMinRef !== null || param.valorMaxRef !== null) {
                         <span class="text-sm font-mono text-gray-700">
                           {{ param.valorMinRef ?? '?' }} – {{ param.valorMaxRef ?? '?' }}
@@ -307,6 +307,16 @@ import {
               </label>
               <p class="text-xs text-gray-400 mt-1 ml-6">
                 Si está marcado, el sistema rechazará resultados que no incluyan este valor
+              </p>
+            </div>
+
+            <!-- Comentario -->
+            <div>
+              <label class="label">Comentario / nota clínica</label>
+              <textarea formControlName="comentario" class="input resize-none" rows="2"
+                placeholder="Ej: Valor deseable < 200 mg/dL | Límite alto 200-239 mg/dL"></textarea>
+              <p class="text-xs text-gray-400 mt-1">
+                Aparece en cursiva debajo del nombre del parámetro en la vista de resultados
               </p>
             </div>
 
@@ -544,6 +554,7 @@ export class ExamParametersComponent implements OnInit {
     orden:            [0],
     tipoResultado:    ['numerico'],
     etiquetaBooleano: [null as string | null],
+    comentario:       [''],
   });
 
   get f() { return this.form.controls; }
@@ -587,6 +598,7 @@ export class ExamParametersComponent implements OnInit {
       orden:            param.orden,
       tipoResultado:    param.tipoResultado ?? 'numerico',
       etiquetaBooleano: param.etiquetaBooleano ?? null,
+      comentario:       param.comentario ?? '',
     });
     this.form.get('codigo')?.disable();
     this.submitError.set('');
@@ -640,6 +652,7 @@ export class ExamParametersComponent implements OnInit {
       orden:            v.orden ?? 0,
       tipoResultado:    (v.tipoResultado as TipoResultado) ?? 'numerico',
       etiquetaBooleano: (v.etiquetaBooleano as any) ?? null,
+      comentario:       v.comentario || null,
     };
 
     const obs = editing

@@ -42,6 +42,7 @@ export interface ExamParameter {
   activo: boolean;
   tipoResultado: TipoResultado;
   etiquetaBooleano: EtiquetaBooleano | null;
+  comentario: string | null;
 }
 
 export interface CreateParameterRequest {
@@ -57,6 +58,7 @@ export interface CreateParameterRequest {
   orden?: number;
   tipoResultado?: TipoResultado;
   etiquetaBooleano?: EtiquetaBooleano | null;
+  comentario?: string | null;
 }
 
 export type UpdateParameterRequest = Partial<CreateParameterRequest>;

@@ -13,7 +13,7 @@ import { EmptyStateComponent } from '../../../shared/components/empty-state/empt
 import { CriticalAlertComponent } from '../../../shared/components/critical-alert/critical-alert.component';
 import { StatusBadgeComponent } from '../../../shared/components/status-badge/status-badge.component';
 import { LabOrder } from '../../../core/models/order.model';
-import { LabResult, valuesToRows, ResultValueDetail } from '../../../core/models/result.model';
+import { LabResult, valuesToRows, isCriticalResult, SENSIBILIDAD_CONFIG, isCultureExam } from '../../../core/models/result.model';
 import { NotificationConfig } from '../../../core/models/notification.model';
 
 @Component({
@@ -117,6 +117,28 @@ import { NotificationConfig } from '../../../core/models/notification.model';
             </div>
             <div class="flex flex-wrap items-center gap-2">
               <app-status-badge [status]="currentOrder()!.estadoDeLaOrden" />
+              <button
+                (click)="openPdf()"
+                class="btn-secondary btn-sm"
+                [disabled]="pdfLoading()"
+                title="Ver PDF del informe"
+              >
+                @if (pdfLoading()) {
+                  <span class="w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></span>
+                } @else {
+                  📄
+                }
+                Ver PDF
+              </button>
+              @if (authService.canSendResultEmail()) {
+                <button
+                  (click)="openEmailModal()"
+                  class="btn-secondary btn-sm"
+                  title="Enviar resultados por correo"
+                >
+                  📧 Enviar por email
+                </button>
+              }
               <button (click)="showNotifConfig.set(!showNotifConfig())" class="btn-secondary btn-sm">
                 🔔 Notificar
               </button>
@@ -225,6 +247,9 @@ import { NotificationConfig } from '../../../core/models/notification.model';
                                 principal
                               </span>
                             }
+                            @if (row.comentario) {
+                              <p class="text-xs text-gray-400 italic mt-0.5">{{ row.comentario }}</p>
+                            }
                           </td>
                           <td>
                             <span class="font-medium text-sm"
@@ -264,6 +289,95 @@ import { NotificationConfig } from '../../../core/models/notification.model';
                     </a>
                   </div>
                 }
+
+                <!-- Antibiograma -->
+                @if (result.antibiogramas && result.antibiogramas.length > 0) {
+                  <div class="border-t border-gray-100">
+                    <div class="px-5 py-3 bg-amber-50 border-b border-amber-100">
+                      <p class="text-sm font-semibold text-amber-800">🧫 Antibiograma</p>
+                    </div>
+                    @for (abg of result.antibiogramas; track $index) {
+                      <div class="px-5 py-4 border-b border-gray-50 last:border-0">
+                        <!-- Bacteria header -->
+                        <div class="flex flex-wrap items-center gap-3 mb-3">
+                          <p class="font-semibold text-gray-900">{{ abg.bacteriaAislada }}</p>
+                          @if (abg.gram !== 'n/a') {
+                            <span class="badge text-xs"
+                              [class]="abg.gram === 'positivo' ? 'bg-purple-100 text-purple-700' : 'bg-pink-100 text-pink-700'">
+                              Gram {{ abg.gram }}
+                            </span>
+                          }
+                          @if (abg.tiempoIncubacion) {
+                            <span class="text-xs text-gray-400">⏱ {{ abg.tiempoIncubacion }}</span>
+                          }
+                        </div>
+                        @if (abg.gramOrina) {
+                          <p class="text-xs text-gray-500 mb-2">Gram orina: {{ abg.gramOrina }}</p>
+                        }
+                        @if (abg.observaciones) {
+                          <p class="text-xs text-gray-500 italic mb-2">{{ abg.observaciones }}</p>
+                        }
+
+                        <!-- Antibiotics table -->
+                        @if (abg.items && abg.items.length > 0) {
+                          <div class="table-container rounded-lg border border-gray-200 mt-2">
+                            <table class="table text-xs">
+                              <thead>
+                                <tr>
+                                  <th>Antibiótico</th>
+                                  <th class="text-center">CIM</th>
+                                  <th class="text-center">Sensibilidad</th>
+                                  <th>Método</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                @for (item of abg.items; track item.antibiotico) {
+                                  <tr>
+                                    <td class="font-medium text-gray-800">{{ item.antibiotico }}</td>
+                                    <td class="text-center font-mono text-gray-600">{{ item.cim }}</td>
+                                    <td class="text-center">
+                                      <span class="badge text-xs font-bold"
+                                        [class]="SENSIBILIDAD_CONFIG[item.sensibilidad].class">
+                                        {{ item.sensibilidad }}
+                                        — {{ SENSIBILIDAD_CONFIG[item.sensibilidad].label }}
+                                      </span>
+                                    </td>
+                                    <td class="text-gray-500">{{ item.metodo }}</td>
+                                  </tr>
+                                }
+                              </tbody>
+                            </table>
+                          </div>
+                        } @else {
+                          <p class="text-xs text-gray-400 italic">Sin antibióticos registrados (cultivo negativo)</p>
+                        }
+                      </div>
+                    }
+                  </div>
+                }
+                @if (result.bacteriologo) {
+                  <div class="px-5 py-3 border-t border-gray-100 bg-gray-50 flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg overflow-hidden bg-white border border-gray-200 flex-shrink-0 flex items-center justify-center">
+                      @if (result.bacteriologo.firmaPath) {
+                        <img [src]="apiBase + result.bacteriologo.firmaPath" alt="Firma"
+                          class="w-full h-full object-contain p-0.5" />
+                      } @else {
+                        <span class="text-sm">✍️</span>
+                      }
+                    </div>
+                    <div class="min-w-0">
+                      <p class="text-xs font-semibold text-gray-700 truncate">
+                        {{ result.bacteriologo.nombre }}
+                      </p>
+                      <p class="text-xs text-gray-400">
+                        {{ result.bacteriologo.tipoDocumento }}: {{ result.bacteriologo.identificacion }}
+                        @if (result.bacteriologo.tarjetaProfesional) {
+                          · TP: {{ result.bacteriologo.tarjetaProfesional }}
+                        }
+                      </p>
+                    </div>
+                  </div>
+                }
               </div>
             }
           </div>
@@ -273,6 +387,58 @@ import { NotificationConfig } from '../../../core/models/notification.model';
           description="Ingresa el ID de una orden para ver sus resultados" />
       }
     </div>
+
+    <!-- Email modal -->
+    @if (showEmailModal()) {
+      <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-black/40" (click)="closeEmailModal()"></div>
+        <div class="relative bg-white rounded-2xl shadow-xl w-full max-w-md">
+          <div class="p-6 border-b border-gray-100">
+            <h2 class="text-lg font-bold text-gray-900">Enviar resultados por email</h2>
+            <p class="text-sm text-gray-500 mt-0.5">
+              Orden: <span class="font-mono font-semibold">{{ currentOrder()?.idSolicitudKey }}</span>
+            </p>
+          </div>
+          <div class="p-6 space-y-4">
+            <div>
+              <label class="label">Destinatario</label>
+              <input
+                type="email"
+                [(ngModel)]="emailDest"
+                class="input"
+                placeholder="correo@paciente.com (vacío = usa email del paciente)"
+              />
+              <p class="text-xs text-gray-400 mt-1">
+                Si se deja vacío, se usa el email registrado del paciente
+              </p>
+            </div>
+            <div>
+              <label class="label">Mensaje personalizado</label>
+              <textarea
+                [(ngModel)]="emailMsg"
+                class="input resize-none"
+                rows="3"
+                placeholder="Estimado paciente, adjunto sus resultados de laboratorio..."
+              ></textarea>
+            </div>
+            @if (emailError()) {
+              <div class="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">
+                {{ emailError() }}
+              </div>
+            }
+            <div class="flex gap-3 pt-2">
+              <button (click)="closeEmailModal()" class="btn-secondary flex-1">Cancelar</button>
+              <button (click)="sendEmail()" class="btn-primary flex-1" [disabled]="emailSending()">
+                @if (emailSending()) {
+                  <span class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                }
+                📧 Enviar
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    }
   `,
 })
 export class ResultsListComponent {
@@ -281,10 +447,16 @@ export class ResultsListComponent {
   private readonly notifications = inject(NotificationService);
   readonly authService = inject(AuthService);
 
+  readonly apiBase = 'http://localhost:8080';
   readonly valuesToRows = valuesToRows;
+  readonly SENSIBILIDAD_CONFIG = SENSIBILIDAD_CONFIG;
+  readonly isCultureExam = isCultureExam;
 
   getRows(result: LabResult) {
-    return valuesToRows(result.valuesJson ?? result.values);
+    return valuesToRows(
+      result.valuesJson ?? result.values,
+      result.valoresEstructurados
+    );
   }
 
   searchId = '';
@@ -297,6 +469,16 @@ export class ResultsListComponent {
   readonly currentOrder = signal<LabOrder | null>(null);
   readonly results = signal<LabResult[]>([]);
   readonly showNotifConfig = signal(false);
+
+  // PDF
+  readonly pdfLoading = signal(false);
+
+  // Email modal
+  readonly showEmailModal = signal(false);
+  readonly emailSending = signal(false);
+  readonly emailError = signal('');
+  emailDest = '';
+  emailMsg = '';
 
   notifConfig: NotificationConfig = {
     emailEnabled: false,
@@ -449,5 +631,73 @@ export class ResultsListComponent {
       order.idSolicitudKey
     );
     this.showNotifConfig.set(false);
+  }
+
+  // ─── PDF ──────────────────────────────────────────────────────────────────
+
+  openPdf(): void {
+    const order = this.currentOrder();
+    if (!order) return;
+    this.pdfLoading.set(true);
+    this.resultsService.downloadPdf(order.idSolicitudKey).subscribe({
+      next: (blob) => {
+        // Force MIME type to application/pdf so the browser renders it inline
+        const pdfBlob = new Blob([blob], { type: 'application/pdf' });
+        const url = URL.createObjectURL(pdfBlob);
+        const tab = window.open(url, '_blank');
+        // Revoke after the tab has had time to load the blob
+        if (tab) {
+          tab.addEventListener('load', () => URL.revokeObjectURL(url), { once: true });
+        } else {
+          // Popup blocked — fallback: create a hidden link and click it
+          const a = document.createElement('a');
+          a.href = url;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(url), 5000);
+        }
+        this.pdfLoading.set(false);
+      },
+      error: (err: Error) => {
+        this.notifications.error('Error al generar PDF', err.message);
+        this.pdfLoading.set(false);
+      },
+    });
+  }
+
+  // ─── Email ────────────────────────────────────────────────────────────────
+
+  openEmailModal(): void {
+    this.emailDest = '';
+    this.emailMsg  = '';
+    this.emailError.set('');
+    this.showEmailModal.set(true);
+  }
+
+  closeEmailModal(): void { this.showEmailModal.set(false); }
+
+  sendEmail(): void {
+    const order = this.currentOrder();
+    if (!order) return;
+    this.emailSending.set(true);
+    this.emailError.set('');
+
+    this.resultsService.sendEmail(order.idSolicitudKey, {
+      email:   this.emailDest.trim() || undefined,
+      mensaje: this.emailMsg.trim()  || undefined,
+    }).subscribe({
+      next: (res) => {
+        this.notifications.success('Email enviado', `Enviado a ${res.emailDestino}`);
+        this.closeEmailModal();
+        this.emailSending.set(false);
+      },
+      error: (err: Error) => {
+        this.emailError.set(err.message);
+        this.emailSending.set(false);
+      },
+    });
   }
 }

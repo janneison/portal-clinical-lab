@@ -17,16 +17,26 @@ export interface CreateResultResponse {
   message: string;
 }
 
+export interface SendEmailRequest {
+  email?: string;
+  mensaje?: string;
+}
+
+export interface SendEmailResponse {
+  idSolicitudKey: string;
+  emailDestino: string;
+  pdfPath: string;
+  estado: 'enviado' | 'error';
+  message: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ResultsService {
   private readonly http = inject(HttpClient);
   private readonly ordersBase = `${environment.apiUrl}/orders`;
   private readonly resultsBase = `${environment.apiUrl}/results`;
 
-  /**
-   * GET /orders/{idSolicitudKey}/results
-   * Returns the full valuesJson for each exam result.
-   */
+  /** GET /orders/{id}/results */
   getResultsByOrder(idSolicitudKey: string): Observable<OrderResultsResponse> {
     return this.http
       .get<OrderResultsResponse>(`${this.ordersBase}/${idSolicitudKey}/results`)
@@ -38,8 +48,36 @@ export class ResultsService {
   }
 
   /**
-   * POST /results — register a new result
+   * GET /orders/{id}/results/pdf
+   * Returns a Blob (PDF binary). Opens or downloads in the browser.
    */
+  getPdfUrl(idSolicitudKey: string): string {
+    return `${this.ordersBase}/${idSolicitudKey}/results/pdf`;
+  }
+
+  downloadPdf(idSolicitudKey: string, regenerate = false): Observable<Blob> {
+    const url = `${this.ordersBase}/${idSolicitudKey}/results/pdf${regenerate ? '?regenerate=1' : ''}`;
+    return this.http.get(url, { responseType: 'blob' }).pipe(
+      catchError((err) =>
+        throwError(() => new Error(err.error?.error ?? 'Error al generar el PDF'))
+      )
+    );
+  }
+
+  /**
+   * POST /orders/{id}/results/send-email
+   */
+  sendEmail(idSolicitudKey: string, body: SendEmailRequest = {}): Observable<SendEmailResponse> {
+    return this.http
+      .post<SendEmailResponse>(`${this.ordersBase}/${idSolicitudKey}/results/send-email`, body)
+      .pipe(
+        catchError((err) =>
+          throwError(() => new Error(err.error?.error ?? 'Error al enviar el correo'))
+        )
+      );
+  }
+
+  /** POST /results — register a new result */
   createResult(result: CreateResultRequest): Observable<CreateResultResponse> {
     return this.http.post<CreateResultResponse>(this.resultsBase, result).pipe(
       catchError((err) =>
@@ -52,27 +90,25 @@ export class ResultsService {
   fromApiResult(api: ApiResultItem, nombreDelLaboratorio?: string): LabResult {
     const resultado = extractResultado(api.valuesJson);
     return {
-      id:                  api.labResultId,
-      idSolicitudKey:      '', // filled by caller
-      cups:                api.cups,
+      id:                   api.labResultId,
+      idSolicitudKey:       '',
+      cups:                 api.cups,
       nombreDelLaboratorio,
-      valuesJson:          api.valuesJson,
-      values:              { resultado },   // flat fallback
-      attachmentPath:      null,
-      receivedAt:          api.receivedAt,
-      isCritical:          isCriticalResult(resultado),
+      valuesJson:           api.valuesJson,
+      valoresEstructurados: api.valoresEstructurados,
+      values:               { resultado },
+      attachmentPath:       null,
+      receivedAt:           api.receivedAt,
+      isCritical:           isCriticalResult(resultado),
+      bacteriologo:         api.bacteriologo ?? null,
+      antibiogramas:        api.antibiogramas ?? [],
     };
   }
 
-  /** Enriches a LabResult with the isCritical flag from flat values */
   enrichWithCritical(result: LabResult): LabResult {
-    return {
-      ...result,
-      isCritical: isCriticalResult(result.values.resultado),
-    };
+    return { ...result, isCritical: isCriticalResult(result.values.resultado) };
   }
 
-  /** Generates a shareable plain-text summary */
   generateShareText(result: LabResult, patientName: string): string {
     const lines = [
       `Resultado de Laboratorio`,
