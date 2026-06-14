@@ -172,6 +172,7 @@ export class ShellComponent {
       lab_operator: 'Operador Lab',
       aliado_operator: 'Operador Aliado',
       viewer: 'Visualizador',
+      medico: 'Médico',
     };
     return map[this.authService.currentUser()?.role ?? ''] ?? '';
   }

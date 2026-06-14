@@ -23,6 +23,8 @@ export interface AdminUser {
   email: string;
   role: UserRole;
   aliados: string[];
+  /** IDs of health centers assigned to this user (used by medico role) */
+  health_centers?: number[];
   activo?: boolean;
   created_at?: string;
 }
@@ -33,6 +35,8 @@ export interface CreateUserRequest {
   password: string;
   role: UserRole;
   aliados?: string[];
+  /** Required for medico role — IDs of health centers the doctor can access */
+  health_centers?: number[];
 }
 
 // ─── Roles (catálogo local) ───────────────────────────────────────────────────
@@ -68,6 +72,12 @@ export const ROLE_DEFINITIONS: RoleDefinition[] = [
     label: 'Visualizador',
     description: 'Solo lectura. Lista y consulta órdenes de sus aliados asignados.',
     color: 'bg-gray-100 text-gray-700',
+  },
+  {
+    value: 'medico',
+    label: 'Médico',
+    description: 'Solo puede ver órdenes de los centros de salud que tiene asignados.',
+    color: 'bg-teal-100 text-teal-700',
   },
 ];
 

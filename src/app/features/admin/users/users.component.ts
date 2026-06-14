@@ -2,11 +2,13 @@ import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { AdminService } from '../../../core/services/admin.service';
+import { HealthCenterService } from '../../../core/services/health-center.service';
 import { NotificationService } from '../../../core/services/notification.service';
 import { LoadingSpinnerComponent } from '../../../shared/components/loading-spinner/loading-spinner.component';
 import { EmptyStateComponent } from '../../../shared/components/empty-state/empty-state.component';
 import { AdminUser, CreateUserRequest, ROLE_DEFINITIONS, getRoleDefinition } from '../../../core/models/admin.model';
 import { UserRole } from '../../../core/models/auth.model';
+import { HealthCenter } from '../../../core/models/health-center.model';
 
 @Component({
   selector: 'app-users',
@@ -41,7 +43,7 @@ import { UserRole } from '../../../core/models/auth.model';
                   <th>Usuario</th>
                   <th>Email</th>
                   <th>Rol</th>
-                  <th>Laboratorios asignados</th>
+                  <th>Laboratorios / Centros asignados</th>
                   <th>Estado</th>
                 </tr>
               </thead>
@@ -66,7 +68,15 @@ import { UserRole } from '../../../core/models/auth.model';
                       </span>
                     </td>
                     <td>
-                      @if (user.aliados.length > 0) {
+                      @if (user.role === 'medico' && (user.health_centers?.length ?? 0) > 0) {
+                        <div class="flex flex-wrap gap-1">
+                          @for (hcId of user.health_centers!; track hcId) {
+                            <span class="text-xs bg-teal-50 text-teal-700 px-2 py-0.5 rounded-full">
+                              {{ healthCenterName(hcId) }}
+                            </span>
+                          }
+                        </div>
+                      } @else if (user.aliados.length > 0) {
                         <div class="flex flex-wrap gap-1">
                           @for (a of user.aliados; track a) {
                             <span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
@@ -157,26 +167,60 @@ import { UserRole } from '../../../core/models/auth.model';
               }
             </div>
 
-            <!-- Aliados -->
-            <div>
-              <label class="label">Laboratorios asignados</label>
-              <p class="text-xs text-gray-400 mb-2">
-                Requerido para roles aliado_operator y viewer
-              </p>
-              <div class="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-3">
-                @for (lab of knownLabs; track lab) {
-                  <label class="flex items-center gap-2 text-sm cursor-pointer">
-                    <input
-                      type="checkbox"
-                      [value]="lab"
-                      (change)="toggleAliado(lab, $event)"
-                      class="rounded border-gray-300"
-                    />
-                    <span class="text-gray-700">{{ lab }}</span>
-                  </label>
+            <!-- Aliados (for aliado_operator / viewer) -->
+            @if (selectedRoleValue() !== 'medico') {
+              <div>
+                <label class="label">Laboratorios asignados</label>
+                <p class="text-xs text-gray-400 mb-2">
+                  Requerido para roles aliado_operator y viewer
+                </p>
+                <div class="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                  @for (lab of knownLabs; track lab) {
+                    <label class="flex items-center gap-2 text-sm cursor-pointer">
+                      <input
+                        type="checkbox"
+                        [value]="lab"
+                        (change)="toggleAliado(lab, $event)"
+                        class="rounded border-gray-300"
+                      />
+                      <span class="text-gray-700">{{ lab }}</span>
+                    </label>
+                  }
+                </div>
+              </div>
+            }
+
+            <!-- Health centers (for medico role) -->
+            @if (selectedRoleValue() === 'medico') {
+              <div>
+                <label class="label">Centros de salud asignados</label>
+                <p class="text-xs text-gray-400 mb-2">
+                  El médico solo verá órdenes de los centros seleccionados
+                </p>
+                @if (loadingHealthCenters()) {
+                  <p class="text-xs text-gray-400 italic">Cargando centros de salud...</p>
+                } @else if (healthCenters().length === 0) {
+                  <p class="text-xs text-orange-500">No hay centros de salud registrados</p>
+                } @else {
+                  <div class="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-3">
+                    @for (hc of healthCenters(); track hc.id) {
+                      <label class="flex items-center gap-2 text-sm cursor-pointer">
+                        <input
+                          type="checkbox"
+                          [value]="hc.id"
+                          (change)="toggleHealthCenter(hc.id, $event)"
+                          class="rounded border-gray-300"
+                        />
+                        <span class="text-gray-700">{{ hc.nombre }}</span>
+                        @if (hc.ciudad) {
+                          <span class="text-xs text-gray-400">({{ hc.ciudad }})</span>
+                        }
+                      </label>
+                    }
+                  </div>
                 }
               </div>
-            </div>
+            }
 
             @if (submitError()) {
               <div class="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-sm">
@@ -204,6 +248,7 @@ import { UserRole } from '../../../core/models/auth.model';
 })
 export class UsersComponent implements OnInit {
   private readonly adminService = inject(AdminService);
+  private readonly healthCenterService = inject(HealthCenterService);
   private readonly notifications = inject(NotificationService);
   private readonly fb = inject(FormBuilder);
 
@@ -217,8 +262,11 @@ export class UsersComponent implements OnInit {
   readonly showModal = signal(false);
   readonly submitting = signal(false);
   readonly submitError = signal('');
+  readonly healthCenters = signal<HealthCenter[]>([]);
+  readonly loadingHealthCenters = signal(false);
 
   private selectedAliados: string[] = [];
+  private selectedHealthCenterIds: number[] = [];
 
   readonly form = this.fb.group({
     username: ['', [Validators.required, Validators.minLength(3)]],
@@ -229,8 +277,10 @@ export class UsersComponent implements OnInit {
 
   get f() { return this.form.controls; }
 
+  readonly selectedRoleValue = computed(() => this.form.get('role')?.value as UserRole | '');
+
   readonly selectedRole = computed(() => {
-    const role = this.form.get('role')?.value as UserRole;
+    const role = this.selectedRoleValue();
     return role ? getRoleDefinition(role) : null;
   });
 
@@ -242,12 +292,26 @@ export class UsersComponent implements OnInit {
       { id: 3, username: 'aliado_norte',  email: 'aliado_norte@clinicallab.local',  role: 'aliado_operator', aliados: ['ALIADO-001'],   activo: true },
       { id: 4, username: 'aliado_sur',    email: 'aliado_sur@clinicallab.local',    role: 'aliado_operator', aliados: ['ALIADO-002'],   activo: true },
       { id: 5, username: 'viewer',        email: 'viewer@clinicallab.local',        role: 'viewer',          aliados: [],              activo: true },
+      { id: 6, username: 'dr_gomez',      email: 'dr_gomez@clinicallab.local',      role: 'medico',          aliados: [],              health_centers: [1, 2], activo: true },
     ]);
+
+    // Pre-load health centers for the medico role picker
+    this.loadingHealthCenters.set(true);
+    this.healthCenterService.getHealthCenters().subscribe({
+      next: (list) => { this.healthCenters.set(list); this.loadingHealthCenters.set(false); },
+      error: () => this.loadingHealthCenters.set(false),
+    });
+  }
+
+  /** Returns a health center name by ID for display in the table */
+  healthCenterName(id: number): string {
+    return this.healthCenters().find((hc) => hc.id === id)?.nombre ?? `Centro #${id}`;
   }
 
   openModal(): void {
     this.form.reset();
     this.selectedAliados = [];
+    this.selectedHealthCenterIds = [];
     this.submitError.set('');
     this.showModal.set(true);
   }
@@ -265,6 +329,15 @@ export class UsersComponent implements OnInit {
     }
   }
 
+  toggleHealthCenter(id: number, event: Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    if (checked) {
+      this.selectedHealthCenterIds = [...this.selectedHealthCenterIds, id];
+    } else {
+      this.selectedHealthCenterIds = this.selectedHealthCenterIds.filter((hcId) => hcId !== id);
+    }
+  }
+
   submit(): void {
     if (this.form.invalid) {
       this.form.markAllAsTouched();
@@ -275,23 +348,27 @@ export class UsersComponent implements OnInit {
     this.submitError.set('');
 
     const v = this.form.value;
+    const isMedico = v.role === 'medico';
+
     const payload: CreateUserRequest = {
       username: v.username!,
       email:    v.email!,
       password: v.password!,
       role:     v.role as UserRole,
-      aliados:  this.selectedAliados,
+      aliados:  isMedico ? [] : this.selectedAliados,
+      ...(isMedico && { health_centers: this.selectedHealthCenterIds }),
     };
 
     this.adminService.createUser(payload).subscribe({
       next: (res) => {
         const newUser: AdminUser = {
-          id:       res.id,
-          username: payload.username,
-          email:    payload.email,
-          role:     payload.role,
-          aliados:  payload.aliados ?? [],
-          activo:   true,
+          id:             res.id,
+          username:       payload.username,
+          email:          payload.email,
+          role:           payload.role,
+          aliados:        payload.aliados ?? [],
+          health_centers: payload.health_centers,
+          activo:         true,
         };
         this.users.update((list) => [newUser, ...list]);
         this.notifications.success('Usuario creado', `${payload.username} fue creado exitosamente`);

@@ -8,6 +8,7 @@ interface Permission {
   lab_operator: boolean;
   aliado_operator: boolean;
   viewer: boolean;
+  medico: boolean;
   note?: string;
 }
 
@@ -57,6 +58,7 @@ interface Permission {
                 <th class="text-center">Lab Operator</th>
                 <th class="text-center">Aliado Operator</th>
                 <th class="text-center">Viewer</th>
+                <th class="text-center">Médico</th>
                 <th>Nota</th>
               </tr>
             </thead>
@@ -68,6 +70,7 @@ interface Permission {
                   <td class="text-center">{{ perm.lab_operator ? '✅' : '❌' }}</td>
                   <td class="text-center">{{ perm.aliado_operator ? '✅' : '❌' }}</td>
                   <td class="text-center">{{ perm.viewer ? '✅' : '❌' }}</td>
+                  <td class="text-center">{{ perm.medico ? '✅' : '❌' }}</td>
                   <td class="text-xs text-gray-400">{{ perm.note ?? '' }}</td>
                 </tr>
               }
@@ -82,8 +85,9 @@ interface Permission {
         <p class="text-xs leading-relaxed">
           Los roles son fijos en el sistema y se asignan al crear o editar un usuario.
           <strong>aliado_operator</strong> y <strong>viewer</strong> solo acceden a las órdenes
-          de los laboratorios que tienen asignados. <strong>admin</strong> y
-          <strong>lab_operator</strong> ven todas las órdenes sin restricción.
+          de los laboratorios que tienen asignados. <strong>medico</strong> solo ve órdenes
+          de los centros de salud que le fueron asignados (<code>health_centers</code>).
+          <strong>admin</strong> y <strong>lab_operator</strong> ven todas las órdenes sin restricción.
         </p>
       </div>
     </div>
@@ -93,14 +97,14 @@ export class RolesComponent {
   readonly roles = ROLE_DEFINITIONS;
 
   readonly permissions: Permission[] = [
-    { endpoint: 'POST /auth/login',       admin: true,  lab_operator: true,  aliado_operator: true,  viewer: true,  note: 'Pública' },
-    { endpoint: 'GET /auth/me',           admin: true,  lab_operator: true,  aliado_operator: true,  viewer: true  },
-    { endpoint: 'POST /auth/register',    admin: true,  lab_operator: false, aliado_operator: false, viewer: false, note: 'Solo admin' },
-    { endpoint: 'GET /orders',            admin: true,  lab_operator: true,  aliado_operator: true,  viewer: true,  note: 'Aliado/Viewer: solo sus labs' },
-    { endpoint: 'POST /orders',           admin: true,  lab_operator: true,  aliado_operator: false, viewer: false },
-    { endpoint: 'GET /orders/{id}',       admin: true,  lab_operator: true,  aliado_operator: true,  viewer: true  },
-    { endpoint: 'POST /orders/{id}/send', admin: true,  lab_operator: true,  aliado_operator: false, viewer: false },
-    { endpoint: 'POST /results',          admin: true,  lab_operator: true,  aliado_operator: true,  viewer: false },
+    { endpoint: 'POST /auth/login',       admin: true,  lab_operator: true,  aliado_operator: true,  viewer: true,  medico: true,  note: 'Pública' },
+    { endpoint: 'GET /auth/me',           admin: true,  lab_operator: true,  aliado_operator: true,  viewer: true,  medico: true  },
+    { endpoint: 'POST /auth/register',    admin: true,  lab_operator: false, aliado_operator: false, viewer: false, medico: false, note: 'Solo admin' },
+    { endpoint: 'GET /orders',            admin: true,  lab_operator: true,  aliado_operator: true,  viewer: true,  medico: true,  note: 'Médico: solo sus centros de salud' },
+    { endpoint: 'POST /orders',           admin: true,  lab_operator: true,  aliado_operator: false, viewer: false, medico: false },
+    { endpoint: 'GET /orders/{id}',       admin: true,  lab_operator: true,  aliado_operator: true,  viewer: true,  medico: true  },
+    { endpoint: 'POST /orders/{id}/send', admin: true,  lab_operator: true,  aliado_operator: false, viewer: false, medico: false },
+    { endpoint: 'POST /results',          admin: true,  lab_operator: true,  aliado_operator: true,  viewer: false, medico: false },
   ];
 
   roleIcon(role: string): string {
@@ -109,6 +113,7 @@ export class RolesComponent {
       lab_operator:    '🔬',
       aliado_operator: '🏥',
       viewer:          '👁️',
+      medico:          '👨‍⚕️',
     };
     return map[role] ?? '👤';
   }

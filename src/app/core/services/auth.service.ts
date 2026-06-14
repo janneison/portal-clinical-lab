@@ -56,6 +56,7 @@ export class AuthService {
   readonly canAttachPdf        = computed(() => this._perms().canAttachPdf);
   readonly canSendResultEmail  = computed(() => this._perms().canSendResultEmail);
   readonly canEditExamCatalog  = computed(() => this._perms().canEditExamCatalog);
+  readonly canViewOrders       = computed(() => this._perms().canViewOrders);
 
   // Legacy role-based helpers (kept for guards that still need them)
   readonly isAdmin       = computed(() => this._currentUser()?.role === 'admin');
@@ -65,6 +66,7 @@ export class AuthService {
   readonly isAliadoOperator = computed(() =>
     this._currentUser()?.role === 'aliado_operator'
   );
+  readonly isMedico = computed(() => this._currentUser()?.role === 'medico');
 
   // ─── Auth methods ─────────────────────────────────────────────────────────
 
@@ -110,10 +112,14 @@ export class AuthService {
   getMe() {
     return this.http.get<User>(`${environment.apiUrl}/auth/me`).pipe(
       tap((user) => {
-        // Refresh permissions if the API returns updated ones
+        // Refresh permissions and health_centers if the API returns updated ones
         const stored = this._currentUser();
         if (stored) {
-          const updated: User = { ...stored, permissions: user.permissions ?? stored.permissions };
+          const updated: User = {
+            ...stored,
+            permissions:    user.permissions    ?? stored.permissions,
+            health_centers: user.health_centers ?? stored.health_centers,
+          };
           this.storeSession(this._token()!, updated);
         }
       })
