@@ -111,30 +111,42 @@ Sube el contenido de `dist/portal-clinical-lab/browser/` a la carpeta destino.
 
 Este paso es **crítico**. Angular es una SPA — todas las rutas deben apuntar a `index.html`, de lo contrario el usuario obtendrá un error 404 al refrescar la página o al acceder directamente a una URL como `/dashboard/orders`.
 
-Crea un archivo `.htaccess` en la raíz de la carpeta donde subiste los archivos (al mismo nivel que `index.html`) con el siguiente contenido:
+> **El archivo `.htaccess` ya está incluido en el build.** A partir de ahora, `npm run build:prod` genera automáticamente el `.htaccess` dentro de `dist/portal-clinical-lab/browser/`, así que solo tienes que subirlo junto con el resto de los archivos.
+
+El archivo contiene dos secciones:
+
+### Reescritura de rutas SPA
+Redirige todas las rutas que no correspondan a un archivo real hacia `index.html` para que Angular las maneje.
+
+### Cabeceras de seguridad HTTP
+Se configuran automáticamente vía `mod_headers` (habilitado en la mayoría de cPanel):
+
+| Cabecera | Valor configurado |
+|---|---|
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` |
+| `X-Frame-Options` | `SAMEORIGIN` |
+| `X-Content-Type-Options` | `nosniff` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation=(), payment=()` |
+| `Content-Security-Policy` | ver nota abajo |
+
+> **⚠️ Importante — Content-Security-Policy:** Antes de subir, abre `src/.htaccess` y reemplaza `https://api.clinica.com` en la directiva `connect-src` con la URL real de tu backend. Si no lo haces, el navegador bloqueará las llamadas a la API.
 
 ```apache
-Options -MultiViews
-RewriteEngine On
-RewriteBase /
-
-# Si el archivo existe, servírlo directamente (JS, CSS, imágenes, etc.)
-RewriteCond %{REQUEST_FILENAME} !-f
-RewriteCond %{REQUEST_FILENAME} !-d
-
-# Todo lo demás lo maneja Angular
-RewriteRule ^ index.html [L]
+connect-src 'self' https://TU-API-REAL.com;
 ```
 
-> Si instalaste en una subcarpeta (ej: `/portal`), cambia `RewriteBase /` por `RewriteBase /portal/`.
+Si el CSP bloquea algún recurso legítimo, la consola del navegador mostrará un error `Content Security Policy` con el origen bloqueado — ajusta la directiva correspondiente en `src/.htaccess` y vuelve a compilar.
 
-### Cómo crear el archivo en cPanel
+### Cómo editar `.htaccess` directamente en el servidor
 
-1. En el **Administrador de Archivos**, navega a la carpeta del portal
-2. Haz clic en **+ Archivo**
-3. Nombre del archivo: `.htaccess`
-4. Pega el contenido de arriba
-5. Guarda
+Si necesitas ajustar el CSP sin recompilar:
+
+1. En el **Administrador de Archivos** de cPanel, navega a la carpeta del portal
+2. Abre `.htaccess` con el editor de texto
+3. Modifica la línea `connect-src` y guarda
+
+> Si instalaste en una subcarpeta (ej: `/portal`), cambia `RewriteBase /` por `RewriteBase /portal/` directamente en `src/.htaccess` antes de compilar.
 
 ---
 
@@ -220,7 +232,7 @@ Verifica que todos los archivos de `dist/portal-clinical-lab/browser/` se hayan 
 ```
 public_html/
 └── portal-clinical-lab/          ← document root del dominio
-    ├── .htaccess                  ← configuración de rutas SPA
+    ├── .htaccess                  ← generado automáticamente por el build
     ├── index.html
     ├── favicon.ico
     ├── main-XXXXXXXX.js

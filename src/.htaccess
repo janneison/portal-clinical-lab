@@ -1,0 +1,52 @@
+# ============================================================
+#  Angular SPA — cPanel .htaccess
+#  Place this file at the document root alongside index.html
+# ============================================================
+
+Options -MultiViews
+RewriteEngine On
+RewriteBase /
+
+# ── Serve static files directly (JS, CSS, images, fonts…) ──
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# ── Everything else goes to Angular's index.html ────────────
+RewriteRule ^ index.html [L]
+
+# ============================================================
+#  Security Headers
+# ============================================================
+
+<IfModule mod_headers.c>
+
+  # Force HTTPS for 1 year, include subdomains
+  Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+  # Prevent clickjacking — only allow framing from same origin
+  Header always set X-Frame-Options "SAMEORIGIN"
+
+  # Stop MIME-type sniffing
+  Header always set X-Content-Type-Options "nosniff"
+
+  # Control referrer information sent with requests
+  Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+  # Restrict access to browser features / APIs
+  Header always set Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=()"
+
+  # Content Security Policy
+  # Adjust the API origin (connect-src) to match your real backend URL.
+  Header always set Content-Security-Policy "\
+default-src 'self'; \
+script-src 'self'; \
+style-src 'self' 'unsafe-inline'; \
+img-src 'self' data: blob:; \
+font-src 'self' data:; \
+connect-src 'self' https://api.clinica.com; \
+object-src 'none'; \
+base-uri 'self'; \
+form-action 'self'; \
+frame-ancestors 'self'"
+
+</IfModule>
